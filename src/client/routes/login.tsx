@@ -9,6 +9,7 @@ import { Turnstile } from "../components/Turnstile";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { useMe } from "../lib/auth";
 import { isIos, useInstall } from "../lib/install";
+import { disablePush } from "../lib/push";
 import { usePublicConfig } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, Field } from "../ui/Field";
@@ -69,7 +70,8 @@ export function LoginPage() {
 
   const login = useMutation({
     mutationFn: () => api<Me>("/auth/login", { body: { nomor, password, turnstileToken: token } }),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await disablePush();
       queryClient.setQueryData(["me"], data);
       navigate({ to: "/" });
     },

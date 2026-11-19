@@ -364,3 +364,70 @@ describe("langganan & VAPID", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("review M4", () => {
+  it("pengirim melihat pengumumannya sendiri; kelas non-aktif & tahun ajaran tidak aktif tidak menerima", async () => {
+    const list = (await t.req("GET", "/api/pengumuman", { cookie: c.guruA })).body.map(
+      (p: { judul: string }) => p.judul,
+    );
+    expect(list).toContain("PR Fiqih");
+    const sasaranA = [{ unitId: null, lokasiId: null, kelasId: id.kelasA }];
+    await t.db.execute(sql`update kelas set aktif = false where id = ${id.kelasA}`);
+    expect(await penerimaDariSasaran(t.db, sasaranA, uid.admin)).toEqual([]);
+    await t.db.execute(sql`update kelas set aktif = true where id = ${id.kelasA}`);
+    await t.db.execute(sql`update tahun_ajaran set aktif = false`);
+    expect(await penerimaDariSasaran(t.db, sasaranA, uid.admin)).toEqual([]);
+    await t.db.execute(sql`update tahun_ajaran set aktif = true where id = ${id.ta}`);
+  });
+
+  it("penerima tanpa langganan push tidak dibuatkan job", async () => {
+    t.jobs.length = 0;
+    await t.db.delete(pushSubscriptions);
+    expect((await kirim(c.guruA, [{ kelasId: id.kelasA }], { judul: "Tanpa push" })).status).toBe(
+      201,
+    );
+    expect(t.jobs).toHaveLength(0);
+  });
+
+  it("notifikasi uji dibatasi 5 kali per jam", async () => {
+    for (let i = 0; i < 5; i++)
+      expect((await t.req("POST", "/api/push/uji", { cookie: c.guruB })).status).toBe(200);
+    expect((await t.req("POST", "/api/push/uji", { cookie: c.guruB })).status).toBe(429);
+  });
+
+  it("langganan tidak bisa diambil alih hanya dengan tahu endpoint; bisa dilepas dengan bukti auth", async () => {
+    const milikW1 = {
+      endpoint: "https://push.contoh/milik-w1",
+      keys: { p256dh: "x".repeat(30), auth: "rahasia-w1" },
+    };
+    expect(
+      (await t.req("PUT", "/api/push/langganan", { cookie: c.w1, body: milikW1 })).status,
+    ).toBe(200);
+    // W2 tahu endpoint, tapi bukan pemegang rahasia auth → ditolak.
+    const curi = { ...milikW1, keys: { p256dh: "z".repeat(30), auth: "auth-palsu" } };
+    expect((await t.req("PUT", "/api/push/langganan", { cookie: c.w2, body: curi })).status).toBe(
+      403,
+    );
+    await t.req("DELETE", "/api/push/langganan", {
+      cookie: c.w2,
+      body: { endpoint: milikW1.endpoint, auth: "auth-palsu" },
+    });
+    expect(
+      await t.db
+        .select()
+        .from(pushSubscriptions)
+        .where(eq(pushSubscriptions.endpoint, milikW1.endpoint)),
+    ).toHaveLength(1);
+    // Browser yang sama (memegang auth asli) dipakai W2 setelah login → langganan lama bisa dilepas.
+    await t.req("DELETE", "/api/push/langganan", {
+      cookie: c.w2,
+      body: { endpoint: milikW1.endpoint, auth: "rahasia-w1" },
+    });
+    expect(
+      await t.db
+        .select()
+        .from(pushSubscriptions)
+        .where(eq(pushSubscriptions.endpoint, milikW1.endpoint)),
+    ).toHaveLength(0);
+  });
+});

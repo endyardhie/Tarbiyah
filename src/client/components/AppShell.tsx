@@ -39,7 +39,7 @@ function Badge({ n }: { n: number }) {
   return (
     <span
       aria-hidden
-      className="absolute -top-1.5 -right-2 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-[10px] leading-none font-bold text-white"
+      className="absolute -top-1.5 -right-2 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-[10px] leading-none font-bold text-on-danger"
     >
       {n > 99 ? "99+" : n}
     </span>

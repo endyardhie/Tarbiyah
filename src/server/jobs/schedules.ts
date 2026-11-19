@@ -21,11 +21,12 @@ export async function registerJobs(
   await boss.createQueue(QUEUES.pushSend);
   await scheduleJobs(boss, timeZone);
 
-  await boss.work(QUEUES.heartbeat, async () => {
+  // Interval polling diperbesar: bawaan pg-boss 2 detik per worker = query terus-menerus saat menganggur.
+  await boss.work(QUEUES.heartbeat, { pollingIntervalSeconds: 60 }, async () => {
     console.log(`[heartbeat] ${new Date().toISOString()}`);
   });
   // Bersih-bersih sesi & batas percobaan yang sudah kedaluwarsa (OTP menyusul di M6).
-  await boss.work(QUEUES.cleanup, async () => {
+  await boss.work(QUEUES.cleanup, { pollingIntervalSeconds: 60 }, async () => {
     await db.execute(sql`delete from sessions where kedaluwarsa < now()`);
     await db.execute(sql`delete from rate_limits where reset_at < now()`);
   });
@@ -34,7 +35,7 @@ export async function registerJobs(
   for (let i = 0; i < 5; i++) {
     await boss.work<{ subscriptionId: string; notifikasiId: string }>(
       QUEUES.pushSend,
-      { batchSize: 1, pollingIntervalSeconds: 2 },
+      { batchSize: 1, pollingIntervalSeconds: 10 },
       async ([job]) => {
         if (job) await sendPush(db, cfg, job.data);
       },

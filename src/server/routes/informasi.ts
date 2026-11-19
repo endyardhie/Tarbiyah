@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, isNull, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { langgananSchema, pengumumanSchema, sasaranSchema } from "../../shared/presensi";
@@ -6,6 +6,7 @@ import { transactionWithClient } from "../db/client";
 import { notifikasi, pengumuman, pushSubscriptions, sasaran, users } from "../db/schema";
 import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { requireUser } from "../lib/guards";
+import { lockedFor, recordFailure } from "../lib/rate-limit";
 import { describeDevice } from "../lib/session";
 import { assertBolehKirim, listPengumuman, penerimaDariSasaran } from "../services/pengumuman";
 import { getVapid, notify } from "../services/push";
@@ -121,7 +122,9 @@ export function pushRoutes({ db, pool, boss, config }: AppDeps) {
       .put("/langganan", requireUser, async (c) => {
         const { endpoint, keys } = await parseBody(c, langgananSchema);
         const userId = currentUser(c).id;
-        await db
+        // Langganan yang sudah ada hanya boleh diambil alih oleh pemiliknya atau oleh browser yang
+        // memegang rahasia "auth"-nya (bukti kepemilikan), bukan sekadar tahu alamat endpoint.
+        const [row] = await db
           .insert(pushSubscriptions)
           .values({
             userId,
@@ -133,17 +136,29 @@ export function pushRoutes({ db, pool, boss, config }: AppDeps) {
           .onConflictDoUpdate({
             target: pushSubscriptions.endpoint,
             set: { userId, p256dh: keys.p256dh, auth: keys.auth },
-          });
+            setWhere: or(
+              eq(pushSubscriptions.userId, userId),
+              eq(pushSubscriptions.auth, keys.auth),
+            ),
+          })
+          .returning({ id: pushSubscriptions.id });
+        if (!row) throw fail(403, "Langganan ini milik perangkat lain");
         return c.json({ ok: true });
       })
       .delete("/langganan", requireUser, async (c) => {
-        const { endpoint } = await parseBody(c, z.object({ endpoint: z.string().max(2000) }));
+        // Milik sendiri, atau milik akun lain di browser ini (dibuktikan dengan rahasia "auth") —
+        // dipakai saat login agar push akun sebelumnya tidak nyasar ke pengguna baru.
+        const { endpoint, auth } = await parseBody(
+          c,
+          z.object({ endpoint: z.string().max(2000), auth: z.string().max(100).optional() }),
+        );
+        const mine = eq(pushSubscriptions.userId, currentUser(c).id);
         await db
           .delete(pushSubscriptions)
           .where(
             and(
               eq(pushSubscriptions.endpoint, endpoint),
-              eq(pushSubscriptions.userId, currentUser(c).id),
+              auth ? or(mine, eq(pushSubscriptions.auth, auth)) : mine,
             ),
           );
         return c.json({ ok: true });
@@ -151,6 +166,14 @@ export function pushRoutes({ db, pool, boss, config }: AppDeps) {
       /** Kirim notifikasi uji ke diri sendiri (cek push di perangkat). */
       .post("/uji", requireUser, async (c) => {
         const user = currentUser(c);
+        const key = `push-uji:${user.id}`;
+        const wait = await lockedFor(db, key, 5);
+        if (wait > 0)
+          throw fail(
+            429,
+            `Notifikasi uji dibatasi 5 kali per jam. Coba lagi dalam ${Math.ceil(wait / 60)} menit.`,
+          );
+        await recordFailure(db, key, 60 * 60); // dipakai sebagai penghitung pemakaian
         await transactionWithClient(pool, (tx, client) =>
           notify(tx, client, boss, [user.id], {
             jenis: "sistem",

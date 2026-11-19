@@ -57,7 +57,12 @@ sw.addEventListener("notificationclick", (e) => {
   e.waitUntil(
     sw.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       const win = list.find((w) => w.url.startsWith(sw.location.origin));
-      if (win) return win.navigate(url).then(() => win.focus());
+      // navigate() gagal bila jendela belum dikendalikan service worker → buka jendela baru.
+      if (win)
+        return win
+          .navigate(url)
+          .then(() => win.focus())
+          .catch(() => sw.clients.openWindow(url));
       return sw.clients.openWindow(url);
     }),
   );

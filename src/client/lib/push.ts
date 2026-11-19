@@ -50,13 +50,18 @@ export async function enablePush() {
   await api("/push/langganan", { method: "PUT", body: sub.toJSON() });
 }
 
-/** Matikan push di perangkat ini (juga dipanggil saat keluar agar orang berikutnya tidak menerima). */
+/**
+ * Matikan push di perangkat ini. Dipanggil saat keluar dan saat masuk (langganan sisa akun lain
+ * di browser ini dilepas, agar push akun sebelumnya tidak muncul untuk pengguna baru).
+ */
 export async function disablePush() {
   if (!supported()) return;
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return;
-  await api("/push/langganan", { method: "DELETE", body: { endpoint: sub.endpoint } }).catch(
+  // auth = bukti bahwa browser ini pemegang langganan (boleh melepas walau milik akun lain).
+  const auth = sub.toJSON().keys?.auth;
+  await api("/push/langganan", { method: "DELETE", body: { endpoint: sub.endpoint, auth } }).catch(
     () => {},
   );
   await sub.unsubscribe().catch(() => {});
