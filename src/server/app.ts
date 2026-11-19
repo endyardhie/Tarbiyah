@@ -8,9 +8,14 @@ import { safeError } from "./lib/log";
 import { findSession, loadAuthUser, readSessionToken, setSessionCookie } from "./lib/session";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
+import { imporRoutes } from "./routes/impor";
 import { meRoutes } from "./routes/me";
+import { fileRoutes, pengaturanRoutes } from "./routes/pengaturan";
 import { roleRoutes } from "./routes/roles";
+import { santriRoutes, santriWaliRoutes, waliRoutes } from "./routes/santri";
+import { sekolahRoutes } from "./routes/sekolah";
 import { userRoutes } from "./routes/users";
+import { getIdentitas, isSampleData } from "./services/pengaturan";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -44,17 +49,73 @@ export function createApp(deps: AppDeps) {
       await next();
     })
     .route("/health", healthRoutes(deps))
-    .get("/public-config", (c) => c.json({ turnstileSiteKey: config.turnstileSiteKey }))
+    .get("/public-config", async (c) => {
+      const id = await getIdentitas(db);
+      return c.json({
+        turnstileSiteKey: config.turnstileSiteKey,
+        nama: id.nama,
+        namaSingkat: id.namaSingkat,
+        logoUrl: id.logoId ? `/api/files/${id.logoId}` : null,
+        dataContoh: await isSampleData(db),
+      });
+    })
     .route("/auth", authRoutes(deps))
     .route("/me", meRoutes(deps))
     .route("/users", userRoutes(deps))
     .route("/roles", roleRoutes(deps))
+    .route("/", sekolahRoutes(deps))
+    .route("/santri", santriRoutes(deps))
+    .route("/wali", waliRoutes(deps))
+    .route("/santri-wali", santriWaliRoutes(deps))
+    .route("/impor", imporRoutes(deps))
+    .route("/pengaturan", pengaturanRoutes(deps))
+    .route("/files", fileRoutes(deps))
     .all("*", (c) => c.json({ error: "Tidak ditemukan" }, 404));
 
   const app = new Hono().route("/api", api).onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+    const code = (err as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505") return c.json({ error: "Data yang sama sudah ada" }, 409);
+    if (code === "23503")
+      return c.json({ error: "Data masih dipakai atau rujukan tidak valid" }, 409);
     console.error(`${c.req.method} ${c.req.path}: ${safeError(err)}`);
     return c.json({ error: "Terjadi kesalahan di server" }, 500);
+  });
+
+  // Manifest PWA dinamis dari pengaturan identitas (nama & ikon yang diunggah admin).
+  app.get("/manifest.webmanifest", async (c) => {
+    const id = await getIdentitas(db);
+    const icon = (fileId: string | null, fallback: string) =>
+      fileId ? `/api/files/${fileId}` : fallback;
+    c.header("Cache-Control", "no-cache");
+    return c.json(
+      {
+        name: id.nama,
+        short_name: id.namaSingkat,
+        lang: "id",
+        start_url: "/",
+        scope: "/",
+        display: "standalone",
+        background_color: "#f5f4ee",
+        theme_color: "#15803d",
+        icons: [
+          { src: icon(id.ikon192Id, "/icons/icon-192.png"), sizes: "192x192", type: "image/png" },
+          { src: icon(id.ikon512Id, "/icons/icon-512.png"), sizes: "512x512", type: "image/png" },
+          {
+            src: icon(id.ikonMaskableId, "/icons/icon-maskable-512.png"),
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      200,
+      { "Content-Type": "application/manifest+json" },
+    );
+  });
+  app.get("/apple-touch-icon.png", async (c) => {
+    const id = await getIdentitas(db);
+    return c.redirect(id.ikon192Id ? `/api/files/${id.ikon192Id}` : "/icons/icon-192.png", 302);
   });
 
   if (deps.staticDir) {
@@ -63,6 +124,12 @@ export function createApp(deps: AppDeps) {
     app.use("/assets/*", async (c, next) => {
       await next();
       if (c.res.ok) c.header("Cache-Control", "public, max-age=31536000, immutable");
+    });
+    // Service worker & index.html harus selalu dicek ulang agar versi baru cepat terpasang.
+    app.use("*", async (c, next) => {
+      await next();
+      const p = c.req.path;
+      if (p === "/sw.js" || !p.includes(".")) c.header("Cache-Control", "no-cache");
     });
     app.use("*", serveStatic({ root }));
     // SPA fallback: route frontend selain /api dijawab index.html.

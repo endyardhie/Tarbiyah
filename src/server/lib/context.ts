@@ -5,11 +5,11 @@ import type PgBoss from "pg-boss";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import type { AuthUser } from "./can";
+import type { Storage } from "./storage";
 import type { VerifyTurnstile } from "./turnstile";
 
 export type AppConfig = {
   version: string;
-  timeZone: string;
   appUrl: string;
   trustCloudflare: boolean;
   turnstileSiteKey: string;
@@ -21,6 +21,7 @@ export type AppDeps = {
   boss: PgBoss;
   config: AppConfig;
   verifyTurnstile: VerifyTurnstile;
+  storage: Storage;
   staticDir?: string;
 };
 

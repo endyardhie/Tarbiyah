@@ -37,8 +37,8 @@ export function roleRoutes({ db }: AppDeps) {
           admin: roles.admin,
           izin: sql<
             string[]
-          >`coalesce((select array_agg(izin order by izin) from role_permissions rp where rp.role_id = ${roles.id}), '{}')`,
-          jumlahPengguna: sql<number>`(select count(*)::int from ${userRoles} ur where ur.role_id = ${roles.id})`,
+          >`coalesce((select array_agg(izin order by izin) from role_permissions rp where rp.role_id = "roles"."id"), '{}')`,
+          jumlahPengguna: sql<number>`(select count(*)::int from ${userRoles} ur where ur.role_id = "roles"."id")`,
         })
         .from(roles)
         .orderBy(sql`${roles.admin} desc`, asc(roles.nama));

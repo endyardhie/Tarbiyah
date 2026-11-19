@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
@@ -8,6 +8,8 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { Turnstile } from "../components/Turnstile";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { useMe } from "../lib/auth";
+import { isIos, useInstall } from "../lib/install";
+import { usePublicConfig } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, Field } from "../ui/Field";
 
@@ -31,12 +33,24 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 }
 
 export function BrandHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  const config = usePublicConfig();
+  const logo = config.data?.logoUrl;
   return (
     <div className="mb-6 text-center">
-      <span className="mx-auto mb-4 grid size-16 place-items-center rounded-[22px] bg-primary text-2xl font-extrabold text-on-primary shadow-soft">
-        T
-      </span>
-      <p className="text-sm font-bold tracking-[0.2em] text-primary">TARBIYAH</p>
+      {logo ? (
+        <img
+          src={logo}
+          alt=""
+          className="mx-auto mb-4 size-20 rounded-[22px] bg-white object-contain p-1 shadow-soft"
+        />
+      ) : (
+        <span className="mx-auto mb-4 grid size-16 place-items-center rounded-[22px] bg-primary text-2xl font-extrabold text-on-primary shadow-soft">
+          T
+        </span>
+      )}
+      <p className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
+        {config.data?.nama ?? "TARBIYAH"}
+      </p>
       <h1 className="mt-2 text-2xl font-bold tracking-tight">{title}</h1>
       <p className="mt-1 text-text2">{subtitle}</p>
     </div>
@@ -46,11 +60,7 @@ export function BrandHeader({ title, subtitle }: { title: string; subtitle: stri
 export function LoginPage() {
   const me = useMe();
   const navigate = useNavigate();
-  const config = useQuery({
-    queryKey: ["public-config"],
-    queryFn: () => api<{ turnstileSiteKey: string }>("/public-config"),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const config = usePublicConfig();
   const [nomor, setNomor] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState<string | null>(null);
@@ -134,15 +144,7 @@ export function LoginPage() {
         <Button type="submit" className="w-full" loading={login.isPending}>
           Masuk
         </Button>
-        <div className="border-t border-border pt-4">
-          {/* Aktif di M2 setelah manifest & ikon PWA tersedia. */}
-          <Button variant="secondary" className="w-full" disabled>
-            <Download size={18} /> Install Aplikasi
-          </Button>
-          <p className="mt-2 text-center text-sm text-text2">
-            Pemasangan aplikasi segera tersedia.
-          </p>
-        </div>
+        <InstallSection />
       </form>
     </AuthLayout>
   );
@@ -166,5 +168,73 @@ export function LupaPasswordPage() {
         </Link>
       </div>
     </AuthLayout>
+  );
+}
+
+/** Tombol install PWA yang benar-benar bekerja; panduan manual bila browser tidak memberi prompt. */
+function InstallSection() {
+  const { canPrompt, standalone, installed, prompt } = useInstall();
+  const [help, setHelp] = useState(false);
+  const [status, setStatus] = useState("");
+  if (standalone) return null;
+  if (installed) {
+    return (
+      <p role="status" className="border-t border-border pt-4 text-center text-sm text-text2">
+        Aplikasi terpasang. Buka dari layar utama HP Anda.
+      </p>
+    );
+  }
+
+  async function onClick() {
+    setStatus("");
+    if (!canPrompt) return setHelp((h) => !h);
+    const outcome = await prompt();
+    setStatus(
+      outcome === "accepted"
+        ? "Aplikasi sedang dipasang. Lihat layar utama atau notifikasi browser."
+        : "Pemasangan dibatalkan. Anda tetap bisa memakai aplikasi di browser.",
+    );
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <Button
+        variant="secondary"
+        className="w-full"
+        onClick={onClick}
+        aria-expanded={canPrompt ? undefined : help}
+      >
+        <Download size={18} /> {canPrompt ? "Install Aplikasi" : "Cara Install Aplikasi"}
+      </Button>
+      {help && !canPrompt && (
+        <div role="status" className="rounded-2xl bg-surface-muted p-4 text-sm">
+          {isIos() ? (
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>
+                Buka halaman ini di <strong>Safari</strong>.
+              </li>
+              <li>
+                Ketuk tombol <strong>Bagikan</strong> (kotak dengan panah ke atas).
+              </li>
+              <li>
+                Pilih <strong>Tambah ke Layar Utama</strong>, lalu ketuk <strong>Tambah</strong>.
+              </li>
+            </ol>
+          ) : (
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Buka menu browser (ikon titik tiga ⋮).</li>
+              <li>
+                Pilih <strong>Instal aplikasi</strong> atau{" "}
+                <strong>Tambahkan ke layar utama</strong>.
+              </li>
+              <li>Bila tidak ada, pakai Chrome atau Edge versi terbaru.</li>
+            </ol>
+          )}
+        </div>
+      )}
+      <p aria-live="polite" className="text-center text-sm text-text2">
+        {status}
+      </p>
+    </div>
   );
 }

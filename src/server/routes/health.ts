@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { QUEUES } from "../jobs/queues";
 import type { AppDeps, AppEnv } from "../lib/context";
 import { schoolNow } from "../lib/tanggal";
+import { schoolTimeZone } from "../services/pengaturan";
 
 async function check(fn: () => Promise<unknown>): Promise<boolean> {
   try {
@@ -11,20 +12,21 @@ async function check(fn: () => Promise<unknown>): Promise<boolean> {
   }
 }
 
-export function healthRoutes({ pool, boss, config }: AppDeps) {
+export function healthRoutes({ db, pool, boss, config }: AppDeps) {
   return new Hono<AppEnv>().get("/", async (c) => {
-    const [db, bossOk] = await Promise.all([
+    const [dbOk, bossOk] = await Promise.all([
       check(() => pool.query("select 1")),
       check(() => boss.getQueue(QUEUES.heartbeat)),
     ]);
-    const ok = db && bossOk;
+    const ok = dbOk && bossOk;
+    const zona = dbOk ? await schoolTimeZone(db) : "Asia/Jayapura";
     return c.json(
       {
         ok,
         versi: config.version,
-        waktuSekolah: schoolNow(config.timeZone),
-        zonaWaktu: config.timeZone,
-        db,
+        waktuSekolah: schoolNow(zona),
+        zonaWaktu: zona,
+        db: dbOk,
         boss: bossOk,
       },
       ok ? 200 : 503,

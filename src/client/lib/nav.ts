@@ -1,10 +1,12 @@
 import {
+  Bell,
   BookOpen,
   Building2,
   ClipboardCheck,
   House,
   type LucideIcon,
   Megaphone,
+  Receipt,
   Settings,
   Wallet,
 } from "lucide-react";
@@ -18,9 +20,17 @@ export type AppPath =
   | "/keuangan"
   | "/informasi"
   | "/sekolah"
+  | "/sekolah/santri"
+  | "/sekolah/wali"
+  | "/sekolah/kelas"
+  | "/sekolah/mapel"
+  | "/sekolah/pengajaran"
+  | "/sekolah/struktur"
+  | "/sekolah/impor"
   | "/sistem"
   | "/sistem/pengguna"
   | "/sistem/role"
+  | "/sistem/pengaturan"
   | "/profil"
   | "/perangkat";
 
@@ -36,12 +46,51 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/sistem", label: "Sistem", icon: Settings },
 ];
 
-// Navbar bawah mobile: maks 4 tujuan + "Menu" di paling kanan. Disesuaikan per peran mulai M1.
-export const MOBILE_NAV = (["/", "/presensi", "/akademik", "/informasi"] as const)
-  .map((to) => NAV_ITEMS.find((i) => i.to === to))
-  .filter((i): i is NavItem => Boolean(i));
+/** Wali santri yang tidak punya jabatan maupun kelas/mapel yang dipegang. */
+export function isPureWali(me: Me | null | undefined) {
+  return (
+    !!me &&
+    !me.isAdmin &&
+    me.user.roles.length === 0 &&
+    me.relasi.kelasWali.length === 0 &&
+    me.relasi.pengajaran.length === 0
+  );
+}
 
 /** Menu sesuai hak pengguna (hanya tampilan; server tetap memeriksa can()). */
 export function visibleNav(me: Me | null | undefined) {
-  return NAV_ITEMS.filter((i) => i.to !== "/sistem" || hasPermission(me, "pengguna.kelola"));
+  const wali = isPureWali(me);
+  return NAV_ITEMS.filter((i) => {
+    if (i.to === "/sistem") return hasPermission(me, "pengguna.kelola");
+    if (i.to === "/sekolah" || i.to === "/presensi") return !wali;
+    return true;
+  });
+}
+
+const item = (to: AppPath, label: string, icon: LucideIcon): NavItem => ({ to, label, icon });
+
+/** Navbar bawah mobile per peran: maks 4 tujuan, item ke-5 (paling kanan) selalu "Menu". */
+export function mobileNav(me: Me | null | undefined): NavItem[] {
+  if (isPureWali(me)) {
+    return [
+      item("/", "Beranda", House),
+      item("/akademik", "Akademik", BookOpen),
+      item("/keuangan", "Tagihan", Receipt),
+      item("/informasi", "Notifikasi", Bell),
+    ];
+  }
+  if (me?.relasi.kelasWali.length) {
+    return [
+      item("/", "Beranda", House),
+      item("/presensi", "Presensi", ClipboardCheck),
+      item("/akademik", "Akademik", BookOpen),
+      item("/informasi", "Notifikasi", Bell),
+    ];
+  }
+  return [
+    item("/", "Beranda", House),
+    item("/presensi", "Presensi", ClipboardCheck),
+    item("/akademik", "Akademik", BookOpen),
+    item("/informasi", "Informasi", Megaphone),
+  ];
 }

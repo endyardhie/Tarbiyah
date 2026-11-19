@@ -38,25 +38,31 @@ export function SistemPage() {
             </Link>
           </>
         )}
-        {me?.isAdmin &&
-          [
-            {
-              icon: SlidersHorizontal,
-              title: "Pengaturan",
-              desc: "Identitas, logo, zona waktu (M2)",
-            },
-            { icon: DatabaseBackup, title: "Backup & restore", desc: "Backup ke B2 (M7)" },
-          ].map(({ icon: Icon, title, desc }) => (
-            <Card key={title} className="flex items-center gap-4 opacity-70">
-              <span className="grid size-12 place-items-center rounded-full bg-surface-muted text-text2">
-                <Icon size={22} />
+        {me?.isAdmin && (
+          <Link to="/sistem/pengaturan" className="group">
+            <Card className="flex items-center gap-4 transition-colors group-hover:border-primary">
+              <span className="grid size-12 place-items-center rounded-full bg-soft text-on-soft">
+                <SlidersHorizontal size={22} />
               </span>
               <div className="flex-1">
-                <p className="font-semibold">{title}</p>
-                <p className="text-sm text-text2">Segera hadir · {desc}</p>
+                <p className="font-semibold">Pengaturan</p>
+                <p className="text-sm text-text2">Identitas lembaga, zona waktu, logo</p>
               </div>
+              <ChevronRight className="text-text2" />
             </Card>
-          ))}
+          </Link>
+        )}
+        {me?.isAdmin && (
+          <Card className="flex items-center gap-4 opacity-70">
+            <span className="grid size-12 place-items-center rounded-full bg-surface-muted text-text2">
+              <DatabaseBackup size={22} />
+            </span>
+            <div className="flex-1">
+              <p className="font-semibold">Backup & restore</p>
+              <p className="text-sm text-text2">Segera hadir · backup ke B2 (M7)</p>
+            </div>
+          </Card>
+        )}
       </div>
     </>
   );

@@ -28,4 +28,13 @@ export const GRANTABLE = Object.keys(PERMISSIONS) as [
 export const ADMIN_ONLY = ["pengaturan.kelola", "backup.kelola"] as const;
 export type AdminOnlyPermission = (typeof ADMIN_ONLY)[number];
 
-export type Permission = GrantablePermission | AdminOnlyPermission;
+/**
+ * Izin berbasis relasi: tidak dicentang di jabatan, tetapi tersirat dari izin jabatan tertentu
+ * (lihat semua) atau dari relasi ke data (wali kelas, pengajar, wali santri).
+ */
+export const RELATION_PERMISSIONS = {
+  "santri.lihat": ["santri.kelola", "wali.kelola", "presensi.lihat_semua", "akademik.lihat_semua"],
+} as const satisfies Record<string, readonly GrantablePermission[]>;
+export type RelationPermission = keyof typeof RELATION_PERMISSIONS;
+
+export type Permission = GrantablePermission | AdminOnlyPermission | RelationPermission;

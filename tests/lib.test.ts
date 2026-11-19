@@ -60,6 +60,7 @@ describe("can()", () => {
     isAdmin: false,
     roles: [],
     permissions: new Set(),
+    relasi: { kelasWali: [], pengajaran: [], kelasAjar: [], anak: [] },
     ...over,
   });
 

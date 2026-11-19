@@ -3,7 +3,16 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Db } from "../db/client";
-import { rolePermissions, roles, sessions, userRoles, users } from "../db/schema";
+import {
+  kelas,
+  pengajaran,
+  rolePermissions,
+  roles,
+  santriWali,
+  sessions,
+  userRoles,
+  users,
+} from "../db/schema";
 import type { AuthUser } from "./can";
 
 const COOKIE = "tarbiyah"; // dengan prefix host → __Host-tarbiyah
@@ -81,11 +90,25 @@ export async function loadAuthUser(db: Db, userId: string): Promise<AuthUser | n
     .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
     .where(eq(userRoles.userId, userId));
   const roleMap = new Map(rows.map((r) => [r.id, { id: r.id, nama: r.nama, admin: r.admin }]));
+  const [kelasWali, ajar, anak] = await Promise.all([
+    db.select({ id: kelas.id }).from(kelas).where(eq(kelas.waliKelasId, userId)),
+    db
+      .select({ id: pengajaran.id, kelasId: pengajaran.kelasId })
+      .from(pengajaran)
+      .where(eq(pengajaran.guruId, userId)),
+    db.select({ id: santriWali.santriId }).from(santriWali).where(eq(santriWali.userId, userId)),
+  ]);
   return {
     ...user,
     isAdmin: rows.some((r) => r.admin),
     roles: [...roleMap.values()],
     permissions: new Set(rows.flatMap((r) => (r.izin ? [r.izin] : []))),
+    relasi: {
+      kelasWali: kelasWali.map((k) => k.id),
+      pengajaran: ajar.map((p) => p.id),
+      kelasAjar: [...new Set(ajar.map((p) => p.kelasId))],
+      anak: anak.map((a) => a.id),
+    },
   };
 }
 

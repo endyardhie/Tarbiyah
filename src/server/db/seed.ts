@@ -1,9 +1,10 @@
-// Admin awal (dan nanti data contoh) untuk development/staging. Ditolak di production.
-// Di container: node dist/server/db/seed.js
+// Admin awal (+ data contoh dengan --contoh) untuk development/staging. Ditolak di production.
+// Di container: node dist/server/db/seed.js [--contoh]
 import { normalizePhone } from "../../shared/phone";
 import { ensureDefaultRoles } from "../services/roles";
 import { createFirstAdmin } from "../services/users";
 import { createDb, runMigrations } from "./client";
+import { createSampleData, PASSWORD_CONTOH } from "./contoh";
 
 if (process.env.NODE_ENV === "production") {
   console.error("Seed ditolak: NODE_ENV=production. Untuk admin pertama pakai admin-awal.js.");
@@ -28,5 +29,14 @@ try {
   console.log(`Admin ${nomor} dibuat. Wajib ganti password saat login pertama.`);
 } catch (e) {
   console.log(`Admin dilewati: ${(e as Error).message}`);
+}
+if (process.argv.includes("--contoh")) {
+  const r = await createSampleData(db);
+  console.log(
+    r.dilewati
+      ? "Data contoh sudah ada, dilewati."
+      : `Data contoh dibuat: ${r.kelas} kelas, ${r.santri} santri, ${r.wali} wali, ${r.guru} guru. ` +
+          `Semua akun contoh berpassword "${PASSWORD_CONTOH}" (nomor 628000…).`,
+  );
 }
 await pool.end();

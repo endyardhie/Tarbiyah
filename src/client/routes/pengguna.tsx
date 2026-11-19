@@ -11,7 +11,7 @@ import { Button } from "../ui/Button";
 import { Checkbox, ErrorAlert, Field, Input, inputClass, Textarea } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 
-function TempPassword({ value, nama }: { value: string; nama: string }) {
+export function TempPassword({ value, nama }: { value: string; nama: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="space-y-3 rounded-2xl bg-soft p-4 text-on-soft">

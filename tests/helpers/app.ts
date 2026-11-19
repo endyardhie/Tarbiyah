@@ -1,9 +1,13 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import { createApp } from "../../src/server/app";
 import { roles, userPhones, userRoles, users } from "../../src/server/db/schema";
 import type { AppConfig } from "../../src/server/lib/context";
 import { hashPassword } from "../../src/server/lib/password";
+import { createStorage } from "../../src/server/lib/storage";
 import { createTestDb } from "./db";
 
 export const ORIGIN = "https://app.contoh.sch.id";
@@ -16,7 +20,6 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
   const t = await createTestDb();
   const config: AppConfig = {
     version: "test",
-    timeZone: "Asia/Jayapura",
     appUrl: ORIGIN,
     trustCloudflare: false,
     turnstileSiteKey: "site",
@@ -29,6 +32,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     boss,
     config,
     verifyTurnstile: async (token) => token === TURNSTILE_OK,
+    storage: createStorage(mkdtempSync(join(tmpdir(), "tarbiyah-test-"))),
   });
 
   async function req(method: string, path: string, o: ReqOpts = {}) {

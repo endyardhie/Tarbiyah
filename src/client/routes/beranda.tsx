@@ -3,6 +3,7 @@ import { Activity, CheckCircle2, XCircle } from "lucide-react";
 import { Card, PageHeader } from "../components/Page";
 import { useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
+import { usePublicConfig } from "../lib/sekolah";
 
 type Health = { ok: boolean; versi: string; waktuSekolah: string; db: boolean; boss: boolean };
 
@@ -72,6 +73,7 @@ function SystemStatus() {
 
 export function BerandaPage() {
   const { data: me } = useMe();
+  const config = usePublicConfig();
   const nama = me?.user.namaPanggilan || me?.user.nama;
   return (
     <>
@@ -79,15 +81,23 @@ export function BerandaPage() {
         title={`Assalamu'alaikum${nama ? `, ${nama}` : ""}`}
         subtitle={formatTanggal(new Date())}
       />
+      {config.data?.dataContoh && (
+        <p
+          role="status"
+          className="mb-4 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-medium text-warn"
+        >
+          Aplikasi ini berisi DATA CONTOH untuk uji coba, bukan data santri sungguhan.
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
         <section className="rounded-card bg-primary p-5 text-on-primary shadow-soft dark:bg-soft dark:text-on-soft md:p-6 lg:col-span-7">
-          <h2 className="text-xl font-bold">Selamat datang di TARBIYAH</h2>
+          <h2 className="text-xl font-bold">Selamat datang di {config.data?.nama ?? "TARBIYAH"}</h2>
           <p className="mt-2 max-w-prose opacity-90">
             Sistem informasi sekolah, pondok pesantren, dan madrasah. Fitur presensi, akademik,
             keuangan, dan informasi akan muncul di sini secara bertahap.
           </p>
         </section>
-        <SystemStatus />
+        {me?.isAdmin && <SystemStatus />}
       </div>
     </>
   );

@@ -3,16 +3,31 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Bell, LayoutGrid, LogOut, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { useLogout, useMe } from "../lib/auth";
-import { MOBILE_NAV, type NavItem, visibleNav } from "../lib/nav";
+import { mobileNav, type NavItem, visibleNav } from "../lib/nav";
+import { usePublicConfig } from "../lib/sekolah";
 import { ThemeToggle } from "./ThemeToggle";
 
 function Brand({ compact = false }: { compact?: boolean }) {
+  const config = usePublicConfig();
+  const logo = config.data?.logoUrl;
   return (
-    <div className="flex items-center gap-3">
-      <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-lg font-extrabold text-on-primary">
-        T
-      </span>
-      {!compact && <span className="text-lg font-extrabold tracking-tight">TARBIYAH</span>}
+    <div className="flex min-w-0 items-center gap-3">
+      {logo ? (
+        <img
+          src={logo}
+          alt=""
+          className="size-10 shrink-0 rounded-2xl bg-white object-contain p-0.5"
+        />
+      ) : (
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-lg font-extrabold text-on-primary">
+          T
+        </span>
+      )}
+      {!compact && (
+        <span className="truncate text-lg font-extrabold tracking-tight">
+          {config.data?.namaSingkat ?? "TARBIYAH"}
+        </span>
+      )}
     </div>
   );
 }
@@ -110,9 +125,9 @@ const activeClass = "bg-soft text-on-soft";
 function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const inMenu = !MOBILE_NAV.some((i) =>
-    i.to === "/" ? pathname === "/" : pathname.startsWith(i.to),
-  );
+  const { data: me } = useMe();
+  const items = mobileNav(me);
+  const inMenu = !items.some((i) => (i.to === "/" ? pathname === "/" : pathname.startsWith(i.to)));
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -120,7 +135,7 @@ function MobileNav() {
         aria-label="Navigasi utama"
         className="fixed inset-x-[max(12px,env(safe-area-inset-left))] bottom-[calc(12px+env(safe-area-inset-bottom))] z-40 grid grid-cols-5 gap-[3px] max-[359px]:gap-px rounded-[26px] border border-border bg-surface-raised/95 p-1.5 shadow-soft backdrop-blur-lg md:hidden"
       >
-        {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
+        {items.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
             to={to}

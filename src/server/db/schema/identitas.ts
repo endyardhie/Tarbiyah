@@ -7,14 +7,11 @@ import {
   pgTable,
   primaryKey,
   text,
-  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { uuidv7 } from "../../lib/uuid";
 
-const id = () => uuid("id").primaryKey().$defaultFn(uuidv7);
-const tz = (name: string) => timestamp(name, { withTimezone: true });
+import { id, tz } from "./common";
 
 export const users = pgTable("users", {
   id: id(),

@@ -15,6 +15,13 @@
       "when": 1795102650214,
       "tag": "0001_identitas",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795106169336,
+      "tag": "0002_sekolah",
+      "breakpoints": true
     }
   ]
 }

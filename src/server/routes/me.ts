@@ -15,8 +15,7 @@ export async function meResponse(db: Db, auth: AuthUser) {
     user,
     isAdmin: auth.isAdmin,
     permissions: [...auth.permissions].sort(),
-    // Relasi diisi di M2 (wali kelas, pengajar, wali santri).
-    relasi: { kelasWali: [] as string[], pengajaran: [] as string[], anak: [] as string[] },
+    relasi: auth.relasi,
   };
 }
 

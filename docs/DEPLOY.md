@@ -95,6 +95,11 @@ Seed memakai `SEED_ADMIN_PHONE` dan `SEED_ADMIN_PASSWORD`, aman dijalankan ulang
 ada dilewati), dan **ditolak** bila `NODE_ENV=production`. Masuk dengan nomor itu; aplikasi langsung
 meminta password baru.
 
+**Data contoh (opsional, hanya staging):** `node dist/server/db/seed.js --contoh` mengisi 2 lokasi,
+3 unit, 12 kelas, ±200 santri, ±300 wali, guru, mapel, dan pengajaran. Semua akun contoh berpassword
+`contoh123` dengan nomor `628000…` (bukan nomor WA sungguhan). Beranda menampilkan tanda "DATA CONTOH".
+Jangan dipakai di database yang akan berisi data asli.
+
 ## Production
 
 Langkah lengkap dilengkapi di M7. Untuk **admin pertama** di production (seed ditolak di sana),

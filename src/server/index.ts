@@ -4,7 +4,9 @@ import { createDb, runMigrations } from "./db/client";
 import { configWarnings, parseEnv } from "./env";
 import { createBoss } from "./jobs/boss";
 import { registerJobs } from "./jobs/schedules";
+import { createStorage } from "./lib/storage";
 import { createTurnstileVerifier } from "./lib/turnstile";
+import { schoolTimeZone } from "./services/pengaturan";
 import { ensureDefaultRoles } from "./services/roles";
 
 let env: ReturnType<typeof parseEnv>;
@@ -24,7 +26,7 @@ await ensureDefaultRoles(db);
 
 const boss = createBoss(env.DATABASE_URL);
 await boss.start();
-await registerJobs(boss, db, env.TZ);
+await registerJobs(boss, db, await schoolTimeZone(db));
 
 const app = createApp({
   db,
@@ -32,12 +34,12 @@ const app = createApp({
   boss,
   config: {
     version: env.APP_VERSION,
-    timeZone: env.TZ,
     appUrl: env.APP_URL,
     trustCloudflare: env.TRUST_CLOUDFLARE,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY,
   },
   verifyTurnstile: createTurnstileVerifier(env.TURNSTILE_SECRET_KEY),
+  storage: createStorage(env.DATA_DIR),
   staticDir: "dist/client",
 });
 

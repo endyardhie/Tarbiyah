@@ -14,10 +14,16 @@ import { useMe } from "./lib/auth";
 import { type AppPath, NAV_ITEMS } from "./lib/nav";
 import { PerangkatPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
 import { BerandaPage } from "./routes/beranda";
+import { ImporPage } from "./routes/impor";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
+import { PengajaranPage } from "./routes/pengajaran";
+import { PengaturanPage } from "./routes/pengaturan";
 import { PenggunaPage } from "./routes/pengguna";
 import { RolePage } from "./routes/role";
+import { SantriPage } from "./routes/santri";
+import { KelasPage, MapelPage, SekolahPage, StrukturPage } from "./routes/sekolah";
 import { SistemPage } from "./routes/sistem";
+import { WaliPage } from "./routes/wali";
 import { Button } from "./ui/Button";
 
 const rootRoute = createRootRoute({
@@ -66,7 +72,6 @@ const PLACEHOLDERS: Partial<Record<AppPath, string>> = {
   "/akademik": "Tugas/PR, penilaian, nilai, dan rapor.",
   "/keuangan": "Tagihan SPP, pembayaran, dan laporan keuangan.",
   "/informasi": "Notifikasi, pengumuman, dan kalender.",
-  "/sekolah": "Lokasi, unit, kelas, mapel, santri, dan wali.",
 };
 
 function Placeholder({ path }: { path: AppPath }) {
@@ -99,10 +104,18 @@ const routeTree = rootRoute.addChildren([
     placeholder("/akademik"),
     placeholder("/keuangan"),
     placeholder("/informasi"),
-    placeholder("/sekolah"),
+    page("/sekolah", SekolahPage),
+    page("/sekolah/santri", SantriPage),
+    page("/sekolah/wali", WaliPage),
+    page("/sekolah/kelas", KelasPage),
+    page("/sekolah/mapel", MapelPage),
+    page("/sekolah/pengajaran", PengajaranPage),
+    page("/sekolah/struktur", StrukturPage),
+    page("/sekolah/impor", ImporPage),
     page("/sistem", SistemPage),
     page("/sistem/pengguna", PenggunaPage),
     page("/sistem/role", RolePage),
+    page("/sistem/pengaturan", PengaturanPage),
     page("/profil", ProfilPage),
     page("/perangkat", PerangkatPage),
   ]),
