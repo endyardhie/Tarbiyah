@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
@@ -36,13 +36,14 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
         scheduled.push({ name, tz: opts.tz });
       },
     } as unknown as PgBoss);
+  const storageDir = mkdtempSync(join(tmpdir(), "tarbiyah-test-"));
   const app = createApp({
     db: t.db,
     pool: t.pool,
     boss,
     config,
     verifyTurnstile: async (token) => token === TURNSTILE_OK,
-    storage: createStorage(mkdtempSync(join(tmpdir(), "tarbiyah-test-"))),
+    storage: createStorage(storageDir),
     now: () => clock.now ?? new Date(),
   });
 
@@ -101,7 +102,12 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     return role.id;
   }
 
-  return { ...t, app, req, login, makeUser, roleId, scheduled, clock };
+  async function drop() {
+    await t.drop();
+    rmSync(storageDir, { recursive: true, force: true });
+  }
+
+  return { ...t, drop, app, req, login, makeUser, roleId, scheduled, clock };
 }
 
 export type TestContext = Awaited<ReturnType<typeof createTestContext>>;
