@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { agendaSchema } from "../../shared/presensi";
@@ -36,11 +36,36 @@ export function agendaRoutes({ db }: AppDeps) {
       ) {
         throw fail(400, "Parameter dari/sampai tidak valid");
       }
+      const user = currentUser(c);
+      const staf =
+        user.isAdmin ||
+        user.roles.length > 0 ||
+        user.relasi.kelasWali.length > 0 ||
+        user.relasi.pengajaran.length > 0;
+      const anak = user.relasi.anak;
+      // Wali santri hanya melihat agenda yang sasarannya mengenai kelas anaknya (tahun ajaran aktif).
+      const relevan = staf
+        ? undefined
+        : anak.length
+          ? sql`exists (
+              select 1 from sasaran s
+              join pendaftaran p on p.santri_id in (${sql.join(
+                anak.map((a) => sql`${a}`),
+                sql`, `,
+              )})
+              join kelas k on k.id = p.kelas_id
+              join tahun_ajaran ta on ta.id = p.tahun_ajaran_id and ta.aktif
+              where s.agenda_id = "agenda"."id"
+                and (s.unit_id is null or s.unit_id = k.unit_id)
+                and (s.lokasi_id is null or s.lokasi_id = k.lokasi_id)
+                and (s.kelas_id is null or s.kelas_id = k.id))`
+          : sql`exists (select 1 from sasaran s where s.agenda_id = "agenda"."id"
+              and s.unit_id is null and s.lokasi_id is null and s.kelas_id is null)`;
       // Agenda yang beririsan dengan rentang.
       const rows = await db
         .select()
         .from(agenda)
-        .where(and(lte(agenda.mulai, sampai), gte(agenda.selesai, dari)))
+        .where(and(lte(agenda.mulai, sampai), gte(agenda.selesai, dari), relevan))
         .orderBy(asc(agenda.mulai), asc(agenda.judul));
       return c.json(await withSasaran(db, rows));
     })

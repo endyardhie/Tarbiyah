@@ -16,7 +16,7 @@ export function CetakPresensiPage() {
   const lap = useQuery({
     queryKey: ["presensi", "laporan", qs],
     queryFn: () => api<Laporan>(`/presensi/laporan?${qs}`),
-    enabled: !!me.data,
+    enabled: !!me.data && config.isSuccess,
   });
   if (me.isSuccess && !me.data) return <Navigate to="/login" />;
   const d = lap.data;

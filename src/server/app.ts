@@ -61,6 +61,7 @@ export function createApp(deps: AppDeps) {
         namaSingkat: id.namaSingkat,
         logoUrl: id.logoId ? `/api/files/${id.logoId}` : null,
         dataContoh: await isSampleData(db),
+        zonaWaktu: id.zonaWaktu,
       });
     })
     .route("/auth", authRoutes(deps))

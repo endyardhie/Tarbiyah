@@ -12,6 +12,7 @@ import { EmptyState, PageHeader } from "./components/Page";
 import { errorMessage } from "./lib/api";
 import { useMe } from "./lib/auth";
 import { type AppPath, NAV_ITEMS } from "./lib/nav";
+import { usePublicConfig } from "./lib/sekolah";
 import { PerangkatPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
 import { BerandaPage } from "./routes/beranda";
 import { CetakPresensiPage } from "./routes/cetak";
@@ -43,7 +44,9 @@ const rootRoute = createRootRoute({
 /** Semua halaman di dalam aplikasi butuh login; password sementara wajib diganti dulu. */
 function AuthGate() {
   const me = useMe();
-  if (me.isPending) {
+  // Tunggu pengaturan publik (zona waktu sekolah) agar semua tanggal tampil di zona yang benar.
+  const config = usePublicConfig();
+  if (me.isPending || config.isPending) {
     return (
       <div className="grid min-h-dvh place-items-center" aria-busy="true">
         <span className="size-12 animate-pulse rounded-[18px] bg-soft" />

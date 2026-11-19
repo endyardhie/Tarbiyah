@@ -157,6 +157,7 @@ export type PublicConfig = {
   namaSingkat: string;
   logoUrl: string | null;
   dataContoh: boolean;
+  zonaWaktu: string;
 };
 
 export type Status = "H" | "S" | "I" | "A";
@@ -177,6 +178,8 @@ export type PresensiKelas = {
     unitKode: string;
     lokasiNama: string;
     waliKelasNama: string | null;
+    taMulai: string;
+    taSelesai: string;
   };
   tanggal: string;
   hariIni: string;

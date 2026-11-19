@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CalendarOff, CheckCircle2, ClipboardCheck, Printer, Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Laporan, PresensiKelas, SantriRow, Status } from "../../shared/types";
 import { ListSkeleton } from "../components/MasterList";
 import { Card, EmptyState, PageHeader } from "../components/Page";
@@ -71,11 +71,23 @@ function IsiPresensi({
   const [rows, setRows] = useState<Row[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [stale, setStale] = useState(false);
+  const loadedKey = useRef("");
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
   useEffect(() => {
-    if (q.data) {
-      setRows(q.data.santri);
-      setDirty(false);
+    if (!q.data) return;
+    const key = `${q.data.kelas.id}|${q.data.tanggal}`;
+    // Data kelas/tanggal yang sama dimuat ulang (mis. setelah pindah aplikasi) saat ada isian
+    // belum disimpan: jangan ditimpa diam-diam, beri tahu pengguna.
+    if (key === loadedKey.current && dirtyRef.current) {
+      setStale(true);
+      return;
     }
+    loadedKey.current = key;
+    setRows(q.data.santri);
+    setDirty(false);
+    setStale(false);
   }, [q.data]);
   // Cegah kehilangan isian bila halaman ditutup sebelum disimpan.
   useEffect(() => {
@@ -142,6 +154,7 @@ function IsiPresensi({
             aria-label="Tanggal (koreksi)"
             className={`${inputClass} sm:w-48`}
             max={d.hariIni}
+            min={d.kelas.taMulai}
             value={tanggal || d.hariIni}
             onChange={(e) => setTanggal(e.target.value === d.hariIni ? "" : e.target.value)}
           />
@@ -205,6 +218,25 @@ function IsiPresensi({
                     </span>
                   ))}
                 </div>
+                {stale && (
+                  <p
+                    role="alert"
+                    className="flex flex-wrap items-center gap-3 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-medium text-warn"
+                  >
+                    Presensi kelas ini baru saja diubah dari perangkat lain. Simpan untuk menimpanya
+                    dengan isian Anda, atau muat ulang untuk melihat versi terbaru.
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setDirty(false);
+                        setStale(false);
+                        if (q.data) setRows(q.data.santri);
+                      }}
+                    >
+                      Muat ulang
+                    </Button>
+                  </p>
+                )}
                 {!d.bisaUbah && (
                   <ErrorAlert>
                     Presensi ini hanya bisa dilihat. Koreksi tanggal lampau butuh izin khusus.

@@ -6,7 +6,7 @@ import { kelas, lokasi, presensiSesi, units } from "../db/schema";
 import { can } from "../lib/can";
 import { type AppDeps, type AppEnv, currentUser, fail, parseBody, queryId } from "../lib/context";
 import { requireUser } from "../lib/guards";
-import { dateRange, monthBounds, schoolToday } from "../lib/tanggal";
+import { monthBounds, schoolToday } from "../lib/tanggal";
 import { schoolTimeZone } from "../services/pengaturan";
 import {
   bisaUbah,
@@ -14,6 +14,7 @@ import {
   getPresensiKelas,
   isHariLibur,
   laporan,
+  liburKelas,
   simpanPresensi,
 } from "../services/presensi";
 import { activeTahunAjaran } from "../services/sekolah";
@@ -41,7 +42,14 @@ export function presensiRoutes(deps: AppDeps) {
         const mine = [...new Set([...user.relasi.kelasWali, ...user.relasi.kelasAjar])];
         if (!lihatSemua && !mine.length) return c.json({ tanggal, kelas: [] });
         const list = await db
-          .select({ id: kelas.id, nama: kelas.nama, unitKode: units.kode, lokasiNama: lokasi.nama })
+          .select({
+            id: kelas.id,
+            nama: kelas.nama,
+            unitId: kelas.unitId,
+            lokasiId: kelas.lokasiId,
+            unitKode: units.kode,
+            lokasiNama: lokasi.nama,
+          })
           .from(kelas)
           .innerJoin(units, eq(units.id, kelas.unitId))
           .innerJoin(lokasi, eq(lokasi.id, kelas.lokasiId))
@@ -61,12 +69,13 @@ export function presensiRoutes(deps: AppDeps) {
               .where(eq(presensiSesi.tanggal, tanggal))
           ).map((s) => s.kelasId),
         );
+        const libur = await liburKelas(db, list, tanggal);
         const out = [];
-        for (const k of list) {
+        for (const { unitId: _u, lokasiId: _l, ...k } of list) {
           out.push({
             ...k,
             sudah: sudah.has(k.id),
-            ...(await isHariLibur(db, k.id, tanggal)),
+            ...(libur.get(k.id) ?? { libur: false, alasan: null }),
             bisaIsi: await can(user, "presensi.isi", { kelasId: k.id }),
           });
         }
@@ -92,7 +101,7 @@ export function presensiRoutes(deps: AppDeps) {
           tanggal,
           hariIni,
           ...libur,
-          bisaUbah: !libur.libur && (await bisaUbah(user, kelasId, tanggal, hariIni)),
+          bisaUbah: !libur.libur && (await bisaUbah(user, k, tanggal, hariIni)),
           bisaKoreksi: await can(user, "presensi.koreksi"),
           ...data,
         });
@@ -108,8 +117,8 @@ export function presensiRoutes(deps: AppDeps) {
         const santriId = queryId(c, "santriId");
         const dari = qTanggal(c.req.query("dari"), "dari");
         const sampai = qTanggal(c.req.query("sampai"), "sampai");
-        if (sampai < dari || dateRange(dari, sampai).length > 366)
-          throw fail(400, "Rentang tanggal tidak valid (maks 1 tahun)");
+        const hari = (Date.parse(sampai) - Date.parse(dari)) / 86_400_000;
+        if (hari < 0 || hari > 366) throw fail(400, "Rentang tanggal tidak valid (maks 1 tahun)");
         if (!kelasId && !santriId) throw fail(400, "Pilih kelas atau santri");
         // Wali santri hanya lewat santriId anaknya; wali kelas/pengajar lewat kelasnya.
         const scope = kelasId ? { kelasId } : { santriId };

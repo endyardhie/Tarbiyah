@@ -31,6 +31,8 @@ export async function getKelas(db: Db | Tx, kelasId: string) {
       unitId: kelas.unitId,
       lokasiId: kelas.lokasiId,
       tahunAjaranId: kelas.tahunAjaranId,
+      taMulai: tahunAjaran.mulai,
+      taSelesai: tahunAjaran.selesai,
       unitKode: units.kode,
       lokasiNama: lokasi.nama,
       waliKelasNama: users.nama,
@@ -38,6 +40,7 @@ export async function getKelas(db: Db | Tx, kelasId: string) {
     .from(kelas)
     .innerJoin(units, eq(units.id, kelas.unitId))
     .innerJoin(lokasi, eq(lokasi.id, kelas.lokasiId))
+    .innerJoin(tahunAjaran, eq(tahunAjaran.id, kelas.tahunAjaranId))
     .leftJoin(users, eq(users.id, kelas.waliKelasId))
     .where(eq(kelas.id, kelasId));
   if (!k) throw fail(404, "Kelas tidak ditemukan");
@@ -85,6 +88,49 @@ export async function isHariLibur(db: Db | Tx, kelasId: string, tanggal: string)
   return ag ? { libur: true, alasan: ag.judul } : { libur: false, alasan: null };
 }
 
+/**
+ * Status libur banyak kelas sekaligus (dashboard): 2 query total, bukan per kelas.
+ * Aturannya sama dengan isHariLibur.
+ */
+export async function liburKelas(
+  db: Db,
+  list: { id: string; unitId: string; lokasiId: string }[],
+  tanggal: string,
+) {
+  const hari = isoWeekday(tanggal);
+  const [mingguan, agendaLibur] = await Promise.all([
+    db.select().from(liburMingguan).where(eq(liburMingguan.hari, hari)),
+    db
+      .select({
+        judul: agenda.judul,
+        unitId: sasaran.unitId,
+        lokasiId: sasaran.lokasiId,
+        kelasId: sasaran.kelasId,
+      })
+      .from(agenda)
+      .innerJoin(sasaran, eq(sasaran.agendaId, agenda.id))
+      .where(and(eq(agenda.libur, true), lte(agenda.mulai, tanggal), gte(agenda.selesai, tanggal))),
+  ]);
+  const cocok = (
+    r: { unitId: string | null; lokasiId: string | null; kelasId?: string | null },
+    k: { id: string; unitId: string; lokasiId: string },
+  ) =>
+    (!r.unitId || r.unitId === k.unitId) &&
+    (!r.lokasiId || r.lokasiId === k.lokasiId) &&
+    (!r.kelasId || r.kelasId === k.id);
+  return new Map(
+    list.map((k) => {
+      if (mingguan.some((m) => cocok(m, k)))
+        return [k.id, { libur: true, alasan: `Libur mingguan (${HARI[hari]})` }];
+      const ag = agendaLibur.find((a) => cocok(a, k));
+      return [
+        k.id,
+        ag ? { libur: true, alasan: ag.judul } : { libur: false, alasan: null as string | null },
+      ];
+    }),
+  );
+}
+
 /** Santri aktif di kelas + presensi tanggal itu (default H bila belum diisi). */
 export async function getPresensiKelas(db: Db, kelasId: string, tanggal: string) {
   const rows = await db
@@ -130,8 +176,14 @@ export async function getPresensiKelas(db: Db, kelasId: string, tanggal: string)
  * Hak mengubah presensi tanggal tertentu: hari ini → wali kelasnya (atau presensi.koreksi/admin);
  * tanggal lampau → hanya presensi.koreksi (admin). Tanggal mendatang tidak boleh.
  */
-export async function bisaUbah(user: AuthUser, kelasId: string, tanggal: string, today: string) {
-  if (tanggal > today) return false;
+export async function bisaUbah(
+  user: AuthUser,
+  k: { id: string; taMulai: string; taSelesai: string },
+  tanggal: string,
+  today: string,
+) {
+  const kelasId = k.id;
+  if (tanggal > today || tanggal < k.taMulai || tanggal > k.taSelesai) return false;
   if (tanggal === today) return can(user, "presensi.isi", { kelasId });
   return can(user, "presensi.koreksi");
 }
@@ -145,7 +197,11 @@ export async function simpanPresensi(
 ) {
   const { kelasId, tanggal, items } = input;
   if (tanggal > today) throw fail(400, "Presensi tidak bisa diisi untuk tanggal yang akan datang");
-  if (!(await bisaUbah(user, kelasId, tanggal, today))) {
+  const k = await getKelas(db, kelasId);
+  if (tanggal < k.taMulai || tanggal > k.taSelesai) {
+    throw fail(400, "Tanggal di luar tahun ajaran kelas ini");
+  }
+  if (!(await bisaUbah(user, k, tanggal, today))) {
     throw fail(
       403,
       tanggal < today

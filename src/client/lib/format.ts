@@ -1,7 +1,11 @@
-const SCHOOL_TZ = "Asia/Jayapura";
+// Zona waktu sekolah dari Pengaturan; diisi saat public-config dimuat (sebelum halaman aplikasi tampil).
+let schoolTz = "Asia/Jayapura";
+export function setSchoolTimeZone(tz: string) {
+  schoolTz = tz;
+}
 
 /** "Jumat, 20 November 2026" */
-export function formatTanggal(date: Date, timeZone = SCHOOL_TZ) {
+export function formatTanggal(date: Date, timeZone = schoolTz) {
   return new Intl.DateTimeFormat("id-ID", {
     weekday: "long",
     day: "numeric",
@@ -12,7 +16,7 @@ export function formatTanggal(date: Date, timeZone = SCHOOL_TZ) {
 }
 
 /** "20 Nov 2026 09.15" */
-export function formatWaktu(iso: string, timeZone = SCHOOL_TZ) {
+export function formatWaktu(iso: string, timeZone = schoolTz) {
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "short",

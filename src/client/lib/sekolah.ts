@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Kelas, Lokasi, Mapel, PublicConfig, TahunAjaran, Unit } from "../../shared/types";
 import { api } from "./api";
+import { setSchoolTimeZone } from "./format";
 
 export const HARI = ["", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Ahad"];
 export const hariOptions = HARI.slice(1).map((label, i) => ({ value: String(i + 1), label }));
@@ -28,7 +29,11 @@ export const useGuru = (enabled = true) =>
 export const usePublicConfig = () =>
   useQuery({
     queryKey: ["public-config"],
-    queryFn: () => api<PublicConfig>("/public-config"),
+    queryFn: async () => {
+      const c = await api<PublicConfig>("/public-config");
+      setSchoolTimeZone(c.zonaWaktu);
+      return c;
+    },
     staleTime: 5 * 60_000,
   });
 
