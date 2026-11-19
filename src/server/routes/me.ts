@@ -4,7 +4,7 @@ import { changePasswordSchema, profileSchema } from "../../shared/schemas";
 import type { Db } from "../db/client";
 import { sessions } from "../db/schema";
 import type { AuthUser } from "../lib/can";
-import { type AppDeps, type AppEnv, currentUser, fail, parseBody } from "../lib/context";
+import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { requireUser } from "../lib/guards";
 import { changePassword, getUsers, updateProfile } from "../services/users";
 
@@ -27,7 +27,7 @@ export function meRoutes({ db }: AppDeps) {
     .patch("/", async (c) => {
       const input = await parseBody(c, profileSchema);
       const user = currentUser(c);
-      await updateProfile(db, user.id, input);
+      await updateProfile(db, user.id, input, c.get("ip"));
       return c.json(await meResponse(db, user));
     })
     .post("/password", async (c) => {
@@ -38,6 +38,7 @@ export function meRoutes({ db }: AppDeps) {
         c.get("sessionId") as string,
         passwordLama,
         passwordBaru,
+        c.get("ip"),
       );
       return c.json({ ok: true });
     })
@@ -57,7 +58,7 @@ export function meRoutes({ db }: AppDeps) {
       return c.json(rows.map((r) => ({ ...r, ini: r.id === current })));
     })
     .delete("/sessions/:id", async (c) => {
-      const id = c.req.param("id");
+      const id = paramId(c);
       if (id === c.get("sessionId")) throw fail(400, "Gunakan tombol Keluar untuk perangkat ini");
       await db
         .delete(sessions)

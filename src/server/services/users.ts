@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { profileSchema, userCreateSchema, userUpdateSchema } from "../../shared/schemas";
 import { type Db, isUniqueViolation, type Tx } from "../db/client";
-import { roles, sessions, userPhones, userRoles, users } from "../db/schema";
+import { rolePermissions, roles, sessions, userPhones, userRoles, users } from "../db/schema";
 import { audit } from "../lib/audit";
 import type { AuthUser } from "../lib/can";
 import { fail } from "../lib/context";
@@ -81,13 +81,32 @@ async function adminRole(tx: Tx, lock = false) {
   return row?.id ?? null;
 }
 
-async function assertRoleGrant(tx: Tx, actor: AuthUser, roleIds: string[], adminId: string | null) {
-  if (!actor.isAdmin && adminId && roleIds.includes(adminId)) {
+/**
+ * Aturan memberi jabatan: hanya admin yang memberi Admin, dan non-admin hanya boleh memberi
+ * jabatan yang seluruh izinnya ia punya sendiri (mencegah menaikkan hak sendiri/orang lain).
+ * `added` = jabatan yang baru ditambahkan (jabatan lama yang dipertahankan tidak diperiksa).
+ */
+async function assertRoleGrant(
+  tx: Tx,
+  actor: AuthUser,
+  roleIds: string[],
+  adminId: string | null,
+  added: string[] = roleIds,
+) {
+  if (!actor.isAdmin && adminId && added.includes(adminId)) {
     throw fail(403, "Hanya admin yang boleh memberi jabatan Admin");
   }
   if (roleIds.length === 0) return;
   const found = await tx.select({ id: roles.id }).from(roles).where(inArray(roles.id, roleIds));
   if (found.length !== new Set(roleIds).size) throw fail(400, "Jabatan tidak ditemukan");
+  if (actor.isAdmin || added.length === 0) return;
+  const izin = await tx
+    .select({ izin: rolePermissions.izin })
+    .from(rolePermissions)
+    .where(inArray(rolePermissions.roleId, added));
+  if (izin.some((r) => !actor.permissions.has(r.izin))) {
+    throw fail(403, "Anda hanya boleh memberi jabatan yang izinnya juga Anda miliki");
+  }
 }
 
 const summary = (u: Pick<UserDetail, "nama" | "status" | "phones" | "roles">) => ({
@@ -144,7 +163,13 @@ export async function updateUser(
     const targetIsAdmin = before.roles.some((r) => r.admin);
     if (targetIsAdmin && !actor.isAdmin)
       throw fail(403, "Hanya admin yang boleh mengubah akun admin");
-    await assertRoleGrant(tx, actor, input.roleIds, adminId);
+    const beforeIds = before.roles.map((r) => r.id);
+    const added = input.roleIds.filter((r) => !beforeIds.includes(r));
+    const changed = added.length > 0 || beforeIds.some((r) => !input.roleIds.includes(r));
+    if (id === actor.id && !actor.isAdmin && changed) {
+      throw fail(403, "Jabatan sendiri hanya bisa diubah oleh admin");
+    }
+    await assertRoleGrant(tx, actor, input.roleIds, adminId, added);
 
     const staysActiveAdmin =
       input.status === "aktif" && !!adminId && input.roleIds.includes(adminId);
@@ -215,8 +240,9 @@ export async function resetPassword(db: Db, actor: AuthUser, id: string, ip: str
   return { passwordSementara };
 }
 
-export async function updateProfile(db: Db, userId: string, input: Profile) {
+export async function updateProfile(db: Db, userId: string, input: Profile, ip: string) {
   await db.transaction(async (tx) => {
+    const before = await getUserOr404(tx, userId);
     await tx
       .update(users)
       .set({
@@ -227,6 +253,15 @@ export async function updateProfile(db: Db, userId: string, input: Profile) {
       })
       .where(eq(users.id, userId));
     await replacePhones(tx, userId, input.phones);
+    await audit(tx, {
+      userId,
+      aksi: "profil.ubah",
+      entitas: "users",
+      entitasId: userId,
+      sebelum: summary(before),
+      sesudah: summary(await getUserOr404(tx, userId)),
+      ip,
+    });
   });
 }
 
@@ -237,6 +272,7 @@ export async function changePassword(
   sessionId: string,
   passwordLama: string,
   passwordBaru: string,
+  ip: string,
 ) {
   const [row] = await db
     .select({ hash: users.passwordHash })
@@ -253,6 +289,7 @@ export async function changePassword(
       .set({ passwordHash, wajibGantiPassword: false, diubahAt: new Date() })
       .where(eq(users.id, userId));
     await tx.delete(sessions).where(and(eq(sessions.userId, userId), ne(sessions.id, sessionId)));
+    await audit(tx, { userId, aksi: "password.ganti", entitas: "users", entitasId: userId, ip });
   });
 }
 
@@ -266,4 +303,31 @@ export async function findLoginUser(db: Db, nomor: string) {
       and(eq(userPhones.nomor, nomor), eq(userPhones.untukLogin, true), eq(users.status, "aktif")),
     );
   return row ?? null;
+}
+
+/**
+ * Admin pertama untuk instalasi baru (dipakai seed dan perintah admin-awal).
+ * Ditolak bila sudah ada admin aktif: admin berikutnya dibuat lewat halaman Pengguna.
+ */
+export async function createFirstAdmin(db: Db, nomor: string, password: string) {
+  const passwordHash = await hashPassword(password);
+  return db.transaction(async (tx) => {
+    const adminId = await adminRole(tx, true);
+    if (!adminId) throw new Error("Jabatan Admin tidak ditemukan");
+    const [{ n } = { n: 0 }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userRoles)
+      .innerJoin(users, eq(users.id, userRoles.userId))
+      .where(and(eq(userRoles.roleId, adminId), eq(users.status, "aktif")));
+    if (n > 0) throw fail(409, "Sudah ada admin aktif; tambah admin lewat halaman Pengguna");
+    const [row] = await tx
+      .insert(users)
+      .values({ nama: "Administrator", passwordHash, wajibGantiPassword: true })
+      .returning({ id: users.id });
+    const userId = row?.id as string;
+    await replacePhones(tx, userId, [{ nomor, label: "Pribadi", punyaWa: true, untukLogin: true }]);
+    await tx.insert(userRoles).values({ userId, roleId: adminId });
+    await audit(tx, { userId: null, aksi: "admin.pertama", entitas: "users", entitasId: userId });
+    return userId;
+  });
 }

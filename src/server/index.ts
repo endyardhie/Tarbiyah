@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { createDb, runMigrations } from "./db/client";
-import { parseEnv } from "./env";
+import { configWarnings, parseEnv } from "./env";
 import { createBoss } from "./jobs/boss";
 import { registerJobs } from "./jobs/schedules";
 import { createTurnstileVerifier } from "./lib/turnstile";
@@ -14,6 +14,8 @@ try {
   console.error((err as Error).message);
   process.exit(1);
 }
+
+for (const w of configWarnings(env)) console.warn(`PERINGATAN: ${w}`);
 
 const { db, pool } = createDb(env.DATABASE_URL);
 console.log("Menjalankan migrasi…");

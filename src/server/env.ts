@@ -25,9 +25,39 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+// Kunci uji resmi Cloudflare Turnstile (1x…, 2x…, 3x…) selalu lolos / selalu gagal.
+const isTurnstileTestKey = (key: string) => /^[123]x0{10,}/.test(key);
+
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const result = envSchema.safeParse(source);
+  const result = envSchema
+    .refine(
+      (e) =>
+        e.NODE_ENV !== "production" ||
+        !(isTurnstileTestKey(e.TURNSTILE_SITE_KEY) || isTurnstileTestKey(e.TURNSTILE_SECRET_KEY)),
+      {
+        path: ["TURNSTILE_SECRET_KEY"],
+        message: "kunci uji Turnstile tidak boleh dipakai di production",
+      },
+    )
+    .safeParse(source);
   if (result.success) return result.data;
   const lines = result.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`);
   throw new Error(`Environment variable tidak lengkap/tidak valid:\n${lines.join("\n")}`);
+}
+
+/** Peringatan konfigurasi yang tidak menghentikan start, tapi berbahaya di server. */
+export function configWarnings(env: Env): string[] {
+  if (env.NODE_ENV !== "staging" && env.NODE_ENV !== "production") return [];
+  const warnings: string[] = [];
+  if (!env.TRUST_CLOUDFLARE) {
+    warnings.push(
+      "TRUST_CLOUDFLARE=false: di belakang Traefik semua pengguna terlihat dari satu IP, sehingga " +
+        "batas gagal login per IP bisa mengunci login semua orang. Set TRUST_CLOUDFLARE=true dan " +
+        "batasi port 80/443 hanya untuk IP Cloudflare.",
+    );
+  }
+  if (isTurnstileTestKey(env.TURNSTILE_SITE_KEY) || isTurnstileTestKey(env.TURNSTILE_SECRET_KEY)) {
+    warnings.push("Kunci uji Turnstile dipakai: verifikasi keamanan login selalu lolos.");
+  }
+  return warnings;
 }

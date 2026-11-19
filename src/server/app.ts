@@ -1,8 +1,10 @@
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { clientIp } from "./lib/client-ip";
 import { type AppDeps, type AppEnv, fail } from "./lib/context";
+import { safeError } from "./lib/log";
 import { findSession, loadAuthUser, readSessionToken, setSessionCookie } from "./lib/session";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
@@ -17,6 +19,13 @@ export function createApp(deps: AppDeps) {
   const appOrigin = new URL(config.appUrl).origin;
 
   const api = new Hono<AppEnv>()
+    // Body JSON dibaca utuh ke memori; batasi agar container 512 MB aman. Unggahan berkas punya batas sendiri (M5).
+    .use(
+      bodyLimit({
+        maxSize: 1024 * 1024,
+        onError: (c) => c.json({ error: "Data terlalu besar" }, 413),
+      }),
+    )
     .use(async (c, next) => {
       c.set("ip", clientIp(c, config.trustCloudflare));
       // Cegah CSRF: request yang mengubah data harus datang dari APP_URL.
@@ -44,7 +53,7 @@ export function createApp(deps: AppDeps) {
 
   const app = new Hono().route("/api", api).onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
-    console.error(err);
+    console.error(`${c.req.method} ${c.req.path}: ${safeError(err)}`);
     return c.json({ error: "Terjadi kesalahan di server" }, 500);
   });
 

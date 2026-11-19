@@ -20,6 +20,9 @@ const GROUPS: { label: string; prefix: string[] }[] = [
 const ALL = Object.keys(PERMISSIONS) as GrantablePermission[];
 
 function RoleForm({ role, onClose }: { role: Role | null; onClose: () => void }) {
+  const { data: me } = useMe();
+  // Non-admin hanya boleh memberi izin yang juga ia miliki (dicek ulang di server).
+  const canGive = (p: string) => !!me?.isAdmin || !!me?.permissions.includes(p);
   const [nama, setNama] = useState(role?.nama ?? "");
   const [keterangan, setKeterangan] = useState(role?.keterangan ?? "");
   const [izin, setIzin] = useState<string[]>(role?.izin ?? []);
@@ -67,6 +70,7 @@ function RoleForm({ role, onClose }: { role: Role | null; onClose: () => void })
               label={PERMISSIONS[p]}
               description={p}
               checked={izin.includes(p)}
+              disabled={!canGive(p) && !izin.includes(p)}
               onChange={(e) =>
                 setIzin((list) => (e.target.checked ? [...list, p] : list.filter((x) => x !== p)))
               }

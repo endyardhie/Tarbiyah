@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { normalizePhone } from "../../shared/phone";
 import { loginSchema } from "../../shared/schemas";
 import { sessions, users } from "../db/schema";
+import { audit } from "../lib/audit";
 import { type AppDeps, type AppEnv, fail, parseBody } from "../lib/context";
 import { requireUser } from "../lib/guards";
 import { burnPasswordCheck, verifyPassword } from "../lib/password";
@@ -51,8 +52,13 @@ export function authRoutes({ db, verifyTurnstile }: AppDeps) {
       }
 
       if (phoneKey) await clearFailures(db, phoneKey);
-      const { token } = await createSession(db, found.id, {
-        perangkat: describeDevice(c.req.header("user-agent")),
+      const perangkat = describeDevice(c.req.header("user-agent"));
+      const { token } = await createSession(db, found.id, { perangkat, ip });
+      await audit(db, {
+        userId: found.id,
+        aksi: "login",
+        entitas: "sessions",
+        sesudah: { perangkat },
         ip,
       });
       await db.update(users).set({ loginTerakhir: new Date() }).where(eq(users.id, found.id));

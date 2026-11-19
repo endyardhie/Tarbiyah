@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type pg from "pg";
 import type PgBoss from "pg-boss";
-import type { z } from "zod";
+import { z } from "zod";
 import type { Db } from "../db/client";
 import type { AuthUser } from "./can";
 import type { VerifyTurnstile } from "./turnstile";
@@ -48,3 +48,11 @@ export function currentUser(c: Context<AppEnv>): AuthUser {
 
 export const fail = (status: 400 | 401 | 403 | 404 | 409 | 429, message: string) =>
   new HTTPException(status, { message });
+
+const uuidSchema = z.uuid();
+/** Parameter :id yang bukan UUID dijawab 404, bukan error database. */
+export function paramId(c: Context, name = "id"): string {
+  const id = c.req.param(name);
+  if (!id || !uuidSchema.safeParse(id).success) throw fail(404, "Data tidak ditemukan");
+  return id;
+}

@@ -37,13 +37,20 @@ function UserForm({
   user,
   roles,
   isAdmin,
+  myPermissions,
   onClose,
 }: {
   user: UserDetail | null;
   roles: Role[];
   isAdmin: boolean;
+  myPermissions: string[];
   onClose: () => void;
 }) {
+  // Sama dengan aturan server: non-admin hanya memberi jabatan yang izinnya ia punya.
+  const grantable = (r: Role) =>
+    isAdmin ||
+    (!r.admin && r.izin.every((p) => myPermissions.includes(p))) ||
+    !!user?.roles.some((x) => x.id === r.id);
   const [nama, setNama] = useState(user?.nama ?? "");
   const [namaPanggilan, setNamaPanggilan] = useState(user?.namaPanggilan ?? "");
   const [alamat, setAlamat] = useState(user?.alamat ?? "");
@@ -134,7 +141,7 @@ function UserForm({
             label={r.nama}
             description={r.admin ? "Akses penuh" : r.keterangan}
             checked={roleIds.includes(r.id)}
-            disabled={r.admin && !isAdmin}
+            disabled={!grantable(r)}
             onChange={(e) =>
               setRoleIds((ids) =>
                 e.target.checked ? [...ids, r.id] : ids.filter((x) => x !== r.id),
@@ -327,6 +334,7 @@ export function PenggunaPage() {
             user={editing === "baru" ? null : editing}
             roles={roles.data ?? []}
             isAdmin={!!me?.isAdmin}
+            myPermissions={me?.permissions ?? []}
             onClose={() => setEditing(null)}
           />
         )}

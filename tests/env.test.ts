@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEnv } from "../src/server/env";
+import { configWarnings, parseEnv } from "../src/server/env";
 
 const valid = {
   APP_URL: "https://app.contoh.sch.id",
@@ -28,5 +28,31 @@ describe("parseEnv", () => {
 
   it("TRUST_CLOUDFLARE=true dibaca sebagai boolean", () => {
     expect(parseEnv({ ...valid, TRUST_CLOUDFLARE: "true" }).TRUST_CLOUDFLARE).toBe(true);
+  });
+});
+
+describe("konfigurasi server", () => {
+  const testKeys = {
+    TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+    TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+  };
+
+  it("production menolak kunci uji Turnstile", () => {
+    expect(() => parseEnv({ ...valid, ...testKeys, NODE_ENV: "production" })).toThrow(
+      /kunci uji Turnstile/,
+    );
+    expect(parseEnv({ ...valid, ...testKeys, NODE_ENV: "development" }).NODE_ENV).toBe(
+      "development",
+    );
+  });
+
+  it("staging memberi peringatan TRUST_CLOUDFLARE & kunci uji", () => {
+    const w = configWarnings(parseEnv({ ...valid, ...testKeys, NODE_ENV: "staging" }));
+    expect(w.join(" ")).toMatch(/TRUST_CLOUDFLARE=false/);
+    expect(w.join(" ")).toMatch(/Kunci uji Turnstile/);
+    expect(
+      configWarnings(parseEnv({ ...valid, NODE_ENV: "production", TRUST_CLOUDFLARE: "true" })),
+    ).toEqual([]);
+    expect(configWarnings(parseEnv(valid))).toEqual([]);
   });
 });

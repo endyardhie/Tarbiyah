@@ -4,8 +4,16 @@ import { roleSchema } from "../../shared/schemas";
 import { isUniqueViolation, type Tx } from "../db/client";
 import { rolePermissions, roles, userRoles } from "../db/schema";
 import { audit } from "../lib/audit";
-import { type AppDeps, type AppEnv, currentUser, fail, parseBody } from "../lib/context";
+import type { AuthUser } from "../lib/can";
+import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { requirePermission, requireUser } from "../lib/guards";
+
+/** Non-admin hanya boleh menyusun jabatan dari izin yang ia punya sendiri. */
+function assertGrantable(actor: AuthUser, izin: string[]) {
+  if (!actor.isAdmin && izin.some((p) => !actor.permissions.has(p))) {
+    throw fail(403, "Anda hanya boleh memberi izin yang juga Anda miliki");
+  }
+}
 
 async function getRole(tx: Tx, id: string) {
   const [role] = await tx.select().from(roles).where(eq(roles.id, id));
@@ -38,6 +46,7 @@ export function roleRoutes({ db }: AppDeps) {
     })
     .post("/", async (c) => {
       const input = await parseBody(c, roleSchema);
+      assertGrantable(currentUser(c), input.izin);
       const id = await db
         .transaction(async (tx) => {
           const [row] = await tx
@@ -65,7 +74,8 @@ export function roleRoutes({ db }: AppDeps) {
     })
     .patch("/:id", async (c) => {
       const input = await parseBody(c, roleSchema);
-      const id = c.req.param("id");
+      assertGrantable(currentUser(c), input.izin);
+      const id = paramId(c);
       await db
         .transaction(async (tx) => {
           const before = await getRole(tx, id);
@@ -96,7 +106,7 @@ export function roleRoutes({ db }: AppDeps) {
       return c.json({ ok: true });
     })
     .delete("/:id", async (c) => {
-      const id = c.req.param("id");
+      const id = paramId(c);
       await db.transaction(async (tx) => {
         const before = await getRole(tx, id);
         if (before.admin) throw fail(400, "Jabatan Admin tidak bisa dihapus");

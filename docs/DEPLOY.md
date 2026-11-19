@@ -42,9 +42,17 @@ user sendiri. Catat connection string internalnya, mis.
 | `APP_ENCRYPTION_KEY` | hasil `openssl rand -base64 32` | tandai **secret**; simpan juga di pengelola password. Staging & production **berbeda** |
 | `TURNSTILE_SITE_KEY` | dari widget Turnstile | |
 | `TURNSTILE_SECRET_KEY` | dari widget Turnstile | tandai secret |
-| `TRUST_CLOUDFLARE` | `true` | hanya bila port 80/443 server menerima IP Cloudflare saja |
+| `TRUST_CLOUDFLARE` | `true` | **wajib** `true`, dan port 80/443 server hanya menerima IP Cloudflare (lihat catatan) |
 | `SEED_ADMIN_PHONE` | nomor admin awal | dipakai oleh seed (langkah 8) |
 | `SEED_ADMIN_PASSWORD` | password sementara | tandai secret; ganti setelah login pertama |
+
+> **Catatan IP klien.** Di belakang Traefik, alamat socket yang terlihat aplikasi adalah IP Traefik.
+> Tanpa `TRUST_CLOUDFLARE=true` semua pengguna dianggap satu IP, sehingga 30 kali gagal login dalam
+> 15 menit (dari siapa pun) mengunci login semua orang. Sebaliknya, bila `TRUST_CLOUDFLARE=true` tetapi
+> server bisa diakses langsung tanpa Cloudflare, header IP bisa dipalsukan. Jadi keduanya harus
+> dipasang bersama. Aplikasi menulis `PERINGATAN:` di log saat start bila konfigurasi ini belum benar.
+>
+> Kunci **uji** Turnstile (`1x0000…`) ditolak di production dan memberi peringatan di staging.
 
 Sudah diisi oleh image (tidak perlu diubah): `PORT=3000`, `DATA_DIR=/data`, `TZ=Asia/Jayapura`,
 `NODE_OPTIONS=--max-old-space-size=384`, `APP_VERSION=<commit SHA>`.
@@ -89,4 +97,13 @@ meminta password baru.
 
 ## Production
 
-Dilengkapi di M7.
+Langkah lengkap dilengkapi di M7. Untuk **admin pertama** di production (seed ditolak di sana),
+buka Terminal container lalu jalankan:
+
+```bash
+node dist/server/db/admin-awal.js 0812xxxxxxxx
+```
+
+Perintah ini hanya berhasil bila **belum ada admin aktif**, mencetak password sementara sekali ke
+terminal, dan password itu wajib diganti saat login pertama. Admin berikutnya dibuat dari halaman
+Pengguna.

@@ -1,20 +1,26 @@
-import { useCallback, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 
+// Satu sumber kebenaran (atribut data-theme), semua tombol tema ikut berubah bersamaan.
+const listeners = new Set<() => void>();
+const read = (): Theme => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+const subscribe = (cb: () => void) => {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+};
+
+function toggle() {
+  const next: Theme = read() === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem("tema", next);
+  } catch {
+    // mode privat: tema tetap berlaku untuk sesi ini
+  }
+  for (const l of listeners) l();
+}
+
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(
-    () => (document.documentElement.dataset.theme as Theme) ?? "light",
-  );
-  const toggle = useCallback(() => {
-    const next: Theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem("tema", next);
-    } catch {
-      // mode privat: tema tetap berlaku untuk sesi ini
-    }
-    setTheme(next);
-  }, []);
-  return { theme, toggle };
+  return { theme: useSyncExternalStore(subscribe, read), toggle };
 }

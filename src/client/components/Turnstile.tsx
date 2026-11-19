@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "../lib/theme";
 
 type TurnstileApi = {
   render: (el: HTMLElement, opts: Record<string, unknown>) => string;
@@ -40,6 +41,7 @@ export function Turnstile({
   const onTokenRef = useRef(onToken);
   onTokenRef.current = onToken;
   const [failed, setFailed] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
     let id: string | undefined;
@@ -53,7 +55,7 @@ export function Turnstile({
           language: "id",
           // Layar sempit (320px) tidak muat widget normal 300px.
           size: ref.current.clientWidth < 300 ? "compact" : "flexible",
-          theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+          theme,
           callback: (t: string) => onTokenRef.current(t),
           "expired-callback": () => onTokenRef.current(null),
           "error-callback": () => onTokenRef.current(null),
@@ -64,7 +66,7 @@ export function Turnstile({
       cancelled = true;
       if (id) window.turnstile?.remove(id);
     };
-  }, [siteKey, resetKey]);
+  }, [siteKey, resetKey, theme]);
 
   if (failed) {
     return (
