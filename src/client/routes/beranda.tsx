@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Activity, CheckCircle2, XCircle } from "lucide-react";
 import { Card, PageHeader } from "../components/Page";
+import { useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 
 type Health = { ok: boolean; versi: string; waktuSekolah: string; db: boolean; boss: boolean };
@@ -70,9 +71,14 @@ function SystemStatus() {
 }
 
 export function BerandaPage() {
+  const { data: me } = useMe();
+  const nama = me?.user.namaPanggilan || me?.user.nama;
   return (
     <>
-      <PageHeader title="Assalamu'alaikum" subtitle={formatTanggal(new Date())} />
+      <PageHeader
+        title={`Assalamu'alaikum${nama ? `, ${nama}` : ""}`}
+        subtitle={formatTanggal(new Date())}
+      />
       <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
         <section className="rounded-card bg-primary p-5 text-on-primary shadow-soft dark:bg-soft dark:text-on-soft md:p-6 lg:col-span-7">
           <h2 className="text-xl font-bold">Selamat datang di TARBIYAH</h2>

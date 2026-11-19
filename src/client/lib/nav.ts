@@ -8,6 +8,8 @@ import {
   Settings,
   Wallet,
 } from "lucide-react";
+import type { Me } from "../../shared/types";
+import { hasPermission } from "./auth";
 
 export type AppPath =
   | "/"
@@ -16,7 +18,11 @@ export type AppPath =
   | "/keuangan"
   | "/informasi"
   | "/sekolah"
-  | "/sistem";
+  | "/sistem"
+  | "/sistem/pengguna"
+  | "/sistem/role"
+  | "/profil"
+  | "/perangkat";
 
 export type NavItem = { to: AppPath; label: string; icon: LucideIcon };
 
@@ -34,3 +40,8 @@ export const NAV_ITEMS: NavItem[] = [
 export const MOBILE_NAV = (["/", "/presensi", "/akademik", "/informasi"] as const)
   .map((to) => NAV_ITEMS.find((i) => i.to === to))
   .filter((i): i is NavItem => Boolean(i));
+
+/** Menu sesuai hak pengguna (hanya tampilan; server tetap memeriksa can()). */
+export function visibleNav(me: Me | null | undefined) {
+  return NAV_ITEMS.filter((i) => i.to !== "/sistem" || hasPermission(me, "pengguna.kelola"));
+}

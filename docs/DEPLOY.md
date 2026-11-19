@@ -43,7 +43,7 @@ user sendiri. Catat connection string internalnya, mis.
 | `TURNSTILE_SITE_KEY` | dari widget Turnstile | |
 | `TURNSTILE_SECRET_KEY` | dari widget Turnstile | tandai secret |
 | `TRUST_CLOUDFLARE` | `true` | hanya bila port 80/443 server menerima IP Cloudflare saja |
-| `SEED_ADMIN_PHONE` | nomor admin awal | dipakai mulai M1 (`pnpm db:seed`) |
+| `SEED_ADMIN_PHONE` | nomor admin awal | dipakai oleh seed (langkah 8) |
 | `SEED_ADMIN_PASSWORD` | password sementara | tandai secret; ganti setelah login pertama |
 
 Sudah diisi oleh image (tidak perlu diubah): `PORT=3000`, `DATA_DIR=/data`, `TZ=Asia/Jayapura`,
@@ -74,6 +74,18 @@ Sudah diisi oleh image (tidak perlu diubah): `PORT=3000`, `DATA_DIR=/data`, `TZ=
 - Log container: `Menjalankan migrasi…` lalu `TARBIYAH <sha> berjalan di port 3000`.
 - Status health di Coolify hijau.
 - Pasang cek uptime (mis. UptimeRobot) ke `/api/health`.
+
+### 8. Admin awal
+
+Setelah container staging berjalan, buka **Terminal** container di Coolify lalu jalankan:
+
+```bash
+node dist/server/db/seed.js
+```
+
+Seed memakai `SEED_ADMIN_PHONE` dan `SEED_ADMIN_PASSWORD`, aman dijalankan ulang (admin yang sudah
+ada dilewati), dan **ditolak** bila `NODE_ENV=production`. Masuk dengan nomor itu; aplikasi langsung
+meminta password baru.
 
 ## Production
 

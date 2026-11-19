@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { createDb, runMigrations } from "../../src/server/db/client";
+import { ensureDefaultRoles } from "../../src/server/services/roles";
 
 const ADMIN_URL =
   process.env.TEST_DATABASE_URL ?? "postgres://tarbiyah:tarbiyah@localhost:5432/tarbiyah";
@@ -17,6 +18,7 @@ export async function createTestDb() {
   url.pathname = `/${name}`;
   const { db, pool } = createDb(url.toString());
   await runMigrations(db);
+  await ensureDefaultRoles(db);
 
   return {
     url: url.toString(),

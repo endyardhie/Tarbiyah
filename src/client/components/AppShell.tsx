@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Bell, LayoutGrid, X } from "lucide-react";
+import { Bell, LayoutGrid, LogOut, UserRound, X } from "lucide-react";
 import { useState } from "react";
-import { MOBILE_NAV, NAV_ITEMS, type NavItem } from "../lib/nav";
+import { useLogout, useMe } from "../lib/auth";
+import { MOBILE_NAV, type NavItem, visibleNav } from "../lib/nav";
 import { ThemeToggle } from "./ThemeToggle";
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -32,6 +33,7 @@ function SidebarLink({ item }: { item: NavItem }) {
 }
 
 function Sidebar() {
+  const { data: me } = useMe();
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-20 flex-col gap-6 border-r border-border bg-surface px-3 py-6 md:flex lg:w-64 lg:px-4">
       <div className="flex justify-center lg:justify-start lg:px-2">
@@ -43,7 +45,7 @@ function Sidebar() {
         </span>
       </div>
       <nav aria-label="Navigasi utama" className="flex flex-col gap-1">
-        {NAV_ITEMS.map((item) => (
+        {visibleNav(me).map((item) => (
           <SidebarLink key={item.to} item={item} />
         ))}
       </nav>
@@ -52,6 +54,8 @@ function Sidebar() {
 }
 
 function MenuSheet({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
+  const { data: me } = useMe();
+  const logout = useLogout();
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
@@ -69,20 +73,29 @@ function MenuSheet({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
           </Dialog.Close>
         </div>
         <nav aria-label="Semua menu" className="grid grid-cols-2 gap-2">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              activeOptions={{ exact: to === "/" }}
-              onClick={() => onOpenChange(false)}
-              className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-surface px-3 font-semibold data-[status=active]:border-transparent data-[status=active]:bg-soft data-[status=active]:text-on-soft"
-            >
-              <Icon size={20} className="shrink-0" />
-              <span className="min-w-0 leading-tight">{label}</span>
-            </Link>
-          ))}
+          {[...visibleNav(me), { to: "/profil" as const, label: "Profil", icon: UserRound }].map(
+            ({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                activeOptions={{ exact: to === "/" }}
+                onClick={() => onOpenChange(false)}
+                className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-surface px-3 font-semibold data-[status=active]:border-transparent data-[status=active]:bg-soft data-[status=active]:text-on-soft"
+              >
+                <Icon size={20} className="shrink-0" />
+                <span className="min-w-0 leading-tight">{label}</span>
+              </Link>
+            ),
+          )}
         </nav>
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-wrap justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => logout.mutate()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-semibold text-danger hover:bg-danger-soft"
+          >
+            <LogOut size={20} /> Keluar
+          </button>
           <ThemeToggle withLabel />
         </div>
       </Dialog.Content>
@@ -134,6 +147,8 @@ function MobileNav() {
 }
 
 function TopActions() {
+  const { data: me } = useMe();
+  const initial = (me?.user.namaPanggilan || me?.user.nama || "?").charAt(0).toUpperCase();
   return (
     <div className="flex items-center gap-2">
       <ThemeToggle />
@@ -144,6 +159,17 @@ function TopActions() {
         className="grid size-11 place-items-center rounded-full border border-border bg-surface-raised text-text transition-colors hover:bg-surface-muted"
       >
         <Bell size={20} />
+      </Link>
+      <Link
+        to="/profil"
+        aria-label={`Profil ${me?.user.nama ?? ""}`}
+        title="Profil"
+        className="hidden min-h-11 items-center gap-2 rounded-full border border-border bg-surface-raised py-1 pr-4 pl-1 font-semibold hover:bg-surface-muted md:inline-flex"
+      >
+        <span className="grid size-9 place-items-center rounded-full bg-primary text-on-primary">
+          {initial}
+        </span>
+        <span className="max-w-40 truncate">{me?.user.namaPanggilan || me?.user.nama}</span>
       </Link>
     </div>
   );

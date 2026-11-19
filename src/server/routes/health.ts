@@ -1,10 +1,7 @@
 import { Hono } from "hono";
-import type pg from "pg";
-import type PgBoss from "pg-boss";
 import { QUEUES } from "../jobs/queues";
+import type { AppDeps, AppEnv } from "../lib/context";
 import { schoolNow } from "../lib/tanggal";
-
-export type HealthDeps = { pool: pg.Pool; boss: PgBoss; version: string; timeZone: string };
 
 async function check(fn: () => Promise<unknown>): Promise<boolean> {
   try {
@@ -14,8 +11,8 @@ async function check(fn: () => Promise<unknown>): Promise<boolean> {
   }
 }
 
-export function healthRoutes({ pool, boss, version, timeZone }: HealthDeps) {
-  return new Hono().get("/", async (c) => {
+export function healthRoutes({ pool, boss, config }: AppDeps) {
+  return new Hono<AppEnv>().get("/", async (c) => {
     const [db, bossOk] = await Promise.all([
       check(() => pool.query("select 1")),
       check(() => boss.getQueue(QUEUES.heartbeat)),
@@ -24,9 +21,9 @@ export function healthRoutes({ pool, boss, version, timeZone }: HealthDeps) {
     return c.json(
       {
         ok,
-        versi: version,
-        waktuSekolah: schoolNow(timeZone),
-        zonaWaktu: timeZone,
+        versi: config.version,
+        waktuSekolah: schoolNow(config.timeZone),
+        zonaWaktu: config.timeZone,
         db,
         boss: bossOk,
       },

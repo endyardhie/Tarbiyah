@@ -4,6 +4,8 @@ import { createDb, runMigrations } from "./db/client";
 import { parseEnv } from "./env";
 import { createBoss } from "./jobs/boss";
 import { registerJobs } from "./jobs/schedules";
+import { createTurnstileVerifier } from "./lib/turnstile";
+import { ensureDefaultRoles } from "./services/roles";
 
 let env: ReturnType<typeof parseEnv>;
 try {
@@ -16,16 +18,24 @@ try {
 const { db, pool } = createDb(env.DATABASE_URL);
 console.log("Menjalankan migrasi…");
 await runMigrations(db);
+await ensureDefaultRoles(db);
 
 const boss = createBoss(env.DATABASE_URL);
 await boss.start();
-await registerJobs(boss, env.TZ);
+await registerJobs(boss, db, env.TZ);
 
 const app = createApp({
+  db,
   pool,
   boss,
-  version: env.APP_VERSION,
-  timeZone: env.TZ,
+  config: {
+    version: env.APP_VERSION,
+    timeZone: env.TZ,
+    appUrl: env.APP_URL,
+    trustCloudflare: env.TRUST_CLOUDFLARE,
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY,
+  },
+  verifyTurnstile: createTurnstileVerifier(env.TURNSTILE_SECRET_KEY),
   staticDir: "dist/client",
 });
 
