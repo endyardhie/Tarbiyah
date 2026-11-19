@@ -17,6 +17,8 @@ type ReqOpts = { body?: unknown; cookie?: string; headers?: Record<string, strin
 
 /** Database tes + app + helper request/login/pengguna. */
 export async function createTestContext(overrides: Partial<AppConfig> & { boss?: PgBoss } = {}) {
+  // Jam yang bisa diatur tes (null = jam sungguhan).
+  const clock: { now: Date | null } = { now: null };
   const t = await createTestDb();
   const config: AppConfig = {
     version: "test",
@@ -41,6 +43,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     config,
     verifyTurnstile: async (token) => token === TURNSTILE_OK,
     storage: createStorage(mkdtempSync(join(tmpdir(), "tarbiyah-test-"))),
+    now: () => clock.now ?? new Date(),
   });
 
   async function req(method: string, path: string, o: ReqOpts = {}) {
@@ -98,7 +101,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     return role.id;
   }
 
-  return { ...t, app, req, login, makeUser, roleId, scheduled };
+  return { ...t, app, req, login, makeUser, roleId, scheduled, clock };
 }
 
 export type TestContext = Awaited<ReturnType<typeof createTestContext>>;

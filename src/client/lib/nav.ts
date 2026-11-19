@@ -19,6 +19,7 @@ export type AppPath =
   | "/akademik"
   | "/keuangan"
   | "/informasi"
+  | "/informasi/kalender"
   | "/sekolah"
   | "/sekolah/santri"
   | "/sekolah/wali"
@@ -62,7 +63,7 @@ export function visibleNav(me: Me | null | undefined) {
   const wali = isPureWali(me);
   return NAV_ITEMS.filter((i) => {
     if (i.to === "/sistem") return hasPermission(me, "pengguna.kelola");
-    if (i.to === "/sekolah" || i.to === "/presensi") return !wali;
+    if (i.to === "/sekolah") return !wali;
     return true;
   });
 }

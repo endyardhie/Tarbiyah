@@ -158,3 +158,67 @@ export type PublicConfig = {
   logoUrl: string | null;
   dataContoh: boolean;
 };
+
+export type Status = "H" | "S" | "I" | "A";
+export type KelasHariIni = {
+  id: string;
+  nama: string;
+  unitKode: string;
+  lokasiNama: string;
+  sudah: boolean;
+  libur: boolean;
+  alasan: string | null;
+  bisaIsi: boolean;
+};
+export type PresensiKelas = {
+  kelas: {
+    id: string;
+    nama: string;
+    unitKode: string;
+    lokasiNama: string;
+    waliKelasNama: string | null;
+  };
+  tanggal: string;
+  hariIni: string;
+  libur: boolean;
+  alasan: string | null;
+  bisaUbah: boolean;
+  bisaKoreksi: boolean;
+  sesi: { disimpanAt: string; disimpanOleh: string | null } | null;
+  santri: {
+    pendaftaranId: string;
+    santriId: string;
+    nama: string;
+    namaPanggilan: string | null;
+    noAbsen: number | null;
+    status: Status;
+    keterangan: string | null;
+    tersimpan: boolean;
+  }[];
+};
+export type Laporan = {
+  kelas?: PresensiKelas["kelas"];
+  dari: string;
+  sampai: string;
+  tanggal: string[];
+  rows: {
+    pendaftaranId: string;
+    santriId: string;
+    nama: string;
+    namaPanggilan: string | null;
+    noAbsen: number | null;
+    kelasNama: string;
+    harian: Record<string, Status>;
+    total: Record<Status, number>;
+    persen: number | null;
+  }[];
+};
+export type Agenda = {
+  id: string;
+  judul: string;
+  deskripsi: string | null;
+  mulai: string;
+  selesai: string;
+  libur: boolean;
+  sasaran: { unitId: string | null; lokasiId: string | null; kelasId: string | null }[];
+};

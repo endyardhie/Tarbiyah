@@ -14,11 +14,14 @@ import { useMe } from "./lib/auth";
 import { type AppPath, NAV_ITEMS } from "./lib/nav";
 import { PerangkatPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
 import { BerandaPage } from "./routes/beranda";
+import { CetakPresensiPage } from "./routes/cetak";
 import { ImporPage } from "./routes/impor";
+import { InformasiPage, KalenderPage } from "./routes/informasi";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
 import { PengajaranPage } from "./routes/pengajaran";
 import { PengaturanPage } from "./routes/pengaturan";
 import { PenggunaPage } from "./routes/pengguna";
+import { PresensiPage } from "./routes/presensi";
 import { RolePage } from "./routes/role";
 import { SantriPage } from "./routes/santri";
 import { KelasPage, MapelPage, SekolahPage, StrukturPage } from "./routes/sekolah";
@@ -68,10 +71,8 @@ const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", compo
 
 // Halaman modul yang belum dibangun: judul + keterangan.
 const PLACEHOLDERS: Partial<Record<AppPath, string>> = {
-  "/presensi": "Isi presensi harian dan laporan kehadiran.",
   "/akademik": "Tugas/PR, penilaian, nilai, dan rapor.",
   "/keuangan": "Tagihan SPP, pembayaran, dan laporan keuangan.",
-  "/informasi": "Notifikasi, pengumuman, dan kalender.",
 };
 
 function Placeholder({ path }: { path: AppPath }) {
@@ -95,15 +96,21 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/login", component: LoginPage }),
   createRoute({
     getParentRoute: () => rootRoute,
+    path: "/cetak/presensi",
+    component: CetakPresensiPage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
     path: "/lupa-password",
     component: LupaPasswordPage,
   }),
   appRoute.addChildren([
     page("/", BerandaPage),
-    placeholder("/presensi"),
+    page("/presensi", PresensiPage),
     placeholder("/akademik"),
     placeholder("/keuangan"),
-    placeholder("/informasi"),
+    page("/informasi", InformasiPage),
+    page("/informasi/kalender", KalenderPage),
     page("/sekolah", SekolahPage),
     page("/sekolah/santri", SantriPage),
     page("/sekolah/wali", WaliPage),

@@ -1,8 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery as useQ, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Activity, CheckCircle2, XCircle } from "lucide-react";
 import { Card, PageHeader } from "../components/Page";
+import { api } from "../lib/api";
 import { useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
+import { isPureWali } from "../lib/nav";
+import { useHariIni } from "../lib/presensi";
 import { usePublicConfig } from "../lib/sekolah";
 
 type Health = { ok: boolean; versi: string; waktuSekolah: string; db: boolean; boss: boolean };
@@ -71,6 +75,93 @@ function SystemStatus() {
   );
 }
 
+function KartuPresensiStaf() {
+  const { data: me } = useMe();
+  const hari = useHariIni();
+  if (!hari.data || !me) return null;
+  const lihatSemua = me.isAdmin || me.permissions.includes("presensi.lihat_semua");
+  const kelasSaya = hari.data.kelas.filter((k) => me.relasi.kelasWali.includes(k.id));
+  const belum = hari.data.kelas.filter((k) => !k.sudah && !k.libur);
+  return (
+    <>
+      {kelasSaya.map((k) => (
+        <Card key={k.id} className="lg:col-span-6">
+          <p className="text-sm text-text2">Presensi hari ini</p>
+          <p className="text-lg font-semibold">
+            {k.nama} · {k.unitKode} {k.lokasiNama}
+          </p>
+          <p
+            className={`mt-2 font-semibold ${k.libur ? "text-text2" : k.sudah ? "text-primary" : "text-warn"}`}
+          >
+            {k.libur ? `Hari libur: ${k.alasan}` : k.sudah ? "Sudah diabsen" : "Belum diabsen"}
+          </p>
+          {!k.libur && (
+            <Link
+              to="/presensi"
+              className="mt-4 inline-flex min-h-11 items-center rounded-full bg-primary px-5 font-semibold text-on-primary hover:bg-primary-hover"
+            >
+              {k.sudah ? "Lihat / ubah" : "Absen sekarang"}
+            </Link>
+          )}
+        </Card>
+      ))}
+      {lihatSemua && (
+        <Card className="lg:col-span-6">
+          <p className="text-sm text-text2">Kelas belum absen hari ini</p>
+          <p className="text-3xl font-bold tabular-nums">{belum.length}</p>
+          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm">
+            {belum.map((k) => (
+              <li key={k.id}>
+                {k.nama} · {k.unitKode} {k.lokasiNama}
+              </li>
+            ))}
+            {belum.length === 0 && <li className="text-primary">Semua kelas sudah diabsen.</li>}
+          </ul>
+        </Card>
+      )}
+    </>
+  );
+}
+
+function KartuKehadiranAnak() {
+  const q = useQuery({
+    queryKey: ["presensi", "ringkasan-anak"],
+    queryFn: () =>
+      api<{
+        anak: {
+          santriId: string;
+          nama: string;
+          kelasNama: string;
+          total: Record<"H" | "S" | "I" | "A", number>;
+          persen: number | null;
+        }[];
+      }>("/presensi/ringkasan-anak"),
+  });
+  return (
+    <>
+      {q.data?.anak.map((a) => (
+        <Card key={a.santriId} className="lg:col-span-6">
+          <p className="text-sm text-text2">Kehadiran bulan ini</p>
+          <p className="text-lg font-semibold">{a.nama}</p>
+          <p className="text-sm text-text2">{a.kelasNama}</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums">
+            {a.persen == null ? "—" : `${a.persen.toLocaleString("id-ID")}%`}
+          </p>
+          <p className="text-sm text-text2">
+            Hadir {a.total.H} · Sakit {a.total.S} · Izin {a.total.I} · Alpa {a.total.A}
+          </p>
+          <Link
+            to="/presensi"
+            className="mt-3 inline-flex min-h-11 items-center font-semibold text-primary"
+          >
+            Lihat rincian
+          </Link>
+        </Card>
+      ))}
+    </>
+  );
+}
+
 export function BerandaPage() {
   const { data: me } = useMe();
   const config = usePublicConfig();
@@ -97,6 +188,8 @@ export function BerandaPage() {
             keuangan, dan informasi akan muncul di sini secara bertahap.
           </p>
         </section>
+        {me && !isPureWali(me) && <KartuPresensiStaf />}
+        {me && me.relasi.anak.length > 0 && <KartuKehadiranAnak />}
         {me?.isAdmin && <SystemStatus />}
       </div>
     </>

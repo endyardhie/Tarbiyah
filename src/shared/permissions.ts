@@ -34,6 +34,10 @@ export type AdminOnlyPermission = (typeof ADMIN_ONLY)[number];
  */
 export const RELATION_PERMISSIONS = {
   "santri.lihat": ["santri.kelola", "wali.kelola", "presensi.lihat_semua", "akademik.lihat_semua"],
+  /** Isi presensi hari ini: wali kelasnya (admin & pemegang presensi.koreksi juga boleh). */
+  "presensi.isi": ["presensi.koreksi"],
+  /** Lihat presensi/laporan: wali kelas, pengajar kelas itu, wali santri (anaknya). */
+  "presensi.lihat": ["presensi.lihat_semua", "presensi.koreksi"],
 } as const satisfies Record<string, readonly GrantablePermission[]>;
 export type RelationPermission = keyof typeof RELATION_PERMISSIONS;
 

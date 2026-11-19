@@ -26,6 +26,12 @@
   --info-soft: #dce7fd;
   --focus: #15803d;
   --shadow: 0 1px 2px rgb(28 36 32 / 0.04), 0 8px 24px rgb(28 36 32 / 0.06);
+  /* Tombol presensi: warna terang + teks gelap (kontras ≥ 4.5:1), sama di terang & gelap. */
+  --hadir: #86efac;
+  --sakit: #fde047;
+  --izin: #93c5fd;
+  --alpa: #fca5a5;
+  --on-status: #10201a;
 }
 
 /* Gelap: arang kehijauan, dirancang terpisah (bukan dibalik). */
@@ -76,6 +82,11 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --shadow-soft: var(--shadow);
+  --color-hadir: var(--hadir);
+  --color-sakit: var(--sakit);
+  --color-izin: var(--izin);
+  --color-alpa: var(--alpa);
+  --color-on-status: var(--on-status);
   --radius-card: 24px;
 }
 
@@ -97,5 +108,17 @@ body {
   *::after {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* Halaman cetak: A4 mendatar, tanpa elemen layar. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  body {
+    background: #fff;
+    color: #000;
   }
 }

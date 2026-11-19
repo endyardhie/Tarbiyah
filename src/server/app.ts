@@ -8,11 +8,13 @@ import { clientIp } from "./lib/client-ip";
 import { type AppDeps, type AppEnv, fail } from "./lib/context";
 import { safeError } from "./lib/log";
 import { findSession, loadAuthUser, readSessionToken, setSessionCookie } from "./lib/session";
+import { agendaRoutes } from "./routes/agenda";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
 import { imporRoutes } from "./routes/impor";
 import { meRoutes } from "./routes/me";
 import { fileRoutes, pengaturanRoutes, servePublicFile } from "./routes/pengaturan";
+import { presensiRoutes } from "./routes/presensi";
 import { roleRoutes } from "./routes/roles";
 import { santriRoutes, santriWaliRoutes, waliRoutes } from "./routes/santri";
 import { sekolahRoutes } from "./routes/sekolah";
@@ -72,6 +74,8 @@ export function createApp(deps: AppDeps) {
     .route("/impor", imporRoutes(deps))
     .route("/pengaturan", pengaturanRoutes(deps))
     .route("/files", fileRoutes(deps))
+    .route("/presensi", presensiRoutes(deps))
+    .route("/agenda", agendaRoutes(deps))
     .all("*", (c) => c.json({ error: "Tidak ditemukan" }, 404));
 
   const app = new Hono().route("/api", api).onError((err, c) => {

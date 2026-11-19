@@ -49,6 +49,13 @@ function relationAllows(r: Relasi, permission: Permission, s: Scope): boolean {
         (!!s.santriId && r.anak.includes(s.santriId)) ||
         (!!s.kelasId && (r.kelasWali.includes(s.kelasId) || r.kelasAjar.includes(s.kelasId)))
       );
+    case "presensi.isi":
+      return !!s.kelasId && r.kelasWali.includes(s.kelasId);
+    case "presensi.lihat":
+      return (
+        (!!s.santriId && r.anak.includes(s.santriId)) ||
+        (!!s.kelasId && (r.kelasWali.includes(s.kelasId) || r.kelasAjar.includes(s.kelasId)))
+      );
     default:
       return false;
   }

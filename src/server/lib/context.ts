@@ -22,6 +22,8 @@ export type AppDeps = {
   config: AppConfig;
   verifyTurnstile: VerifyTurnstile;
   storage: Storage;
+  /** Jam sekarang; bisa diganti di tes (mis. tepat tengah malam WIT). */
+  now?: () => Date;
   staticDir?: string;
 };
 
