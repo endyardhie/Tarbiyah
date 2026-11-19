@@ -20,6 +20,9 @@ export type AppPath =
   | "/keuangan"
   | "/informasi"
   | "/informasi/kalender"
+  | "/informasi/pengumuman"
+  | "/notifikasi"
+  | "/notifikasi/aktifkan"
   | "/sekolah"
   | "/sekolah/santri"
   | "/sekolah/wali"
@@ -77,7 +80,7 @@ export function mobileNav(me: Me | null | undefined): NavItem[] {
       item("/", "Beranda", House),
       item("/akademik", "Akademik", BookOpen),
       item("/keuangan", "Tagihan", Receipt),
-      item("/informasi", "Notifikasi", Bell),
+      item("/notifikasi", "Notifikasi", Bell),
     ];
   }
   if (me?.relasi.kelasWali.length) {
@@ -85,7 +88,7 @@ export function mobileNav(me: Me | null | undefined): NavItem[] {
       item("/", "Beranda", House),
       item("/presensi", "Presensi", ClipboardCheck),
       item("/akademik", "Akademik", BookOpen),
-      item("/informasi", "Notifikasi", Bell),
+      item("/notifikasi", "Notifikasi", Bell),
     ];
   }
   return [

@@ -27,7 +27,7 @@ window.addEventListener("appinstalled", () => {
 const standaloneQuery = window.matchMedia("(display-mode: standalone)");
 standaloneQuery.addEventListener?.("change", emit);
 
-const isStandalone = () =>
+export const isStandalone = () =>
   standaloneQuery.matches ||
   (navigator as Navigator & { standalone?: boolean }).standalone === true;
 

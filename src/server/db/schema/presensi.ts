@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, date, index, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
 import { id, tz } from "./common";
 import { users } from "./identitas";
+import { pengumuman } from "./informasi";
 import { kelas, lokasi, pendaftaran, units } from "./sekolah";
 
 /** Penanda "kelas ini sudah diabsen pada tanggal ini" (dibedakan dari "semua hadir"). */
@@ -64,9 +65,14 @@ export const sasaran = pgTable(
   {
     id: id(),
     agendaId: uuid("agenda_id").references(() => agenda.id, { onDelete: "cascade" }),
+    pengumumanId: uuid("pengumuman_id").references(() => pengumuman.id, { onDelete: "cascade" }),
     unitId: uuid("unit_id").references(() => units.id),
     lokasiId: uuid("lokasi_id").references(() => lokasi.id),
     kelasId: uuid("kelas_id").references(() => kelas.id),
   },
-  (t) => [index("sasaran_agenda_idx").on(t.agendaId)],
+  (t) => [
+    index("sasaran_agenda_idx").on(t.agendaId),
+    index("sasaran_pengumuman_idx").on(t.pengumumanId),
+    check("sasaran_satu_induk", sql`num_nonnulls(${t.agendaId}, ${t.pengumumanId}) = 1`),
+  ],
 );

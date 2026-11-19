@@ -10,6 +10,8 @@ import type { VerifyTurnstile } from "./turnstile";
 
 export type AppConfig = {
   version: string;
+  /** APP_ENCRYPTION_KEY (base64) untuk secret di tabel settings. */
+  encryptionKey: string;
   appUrl: string;
   trustCloudflare: boolean;
   turnstileSiteKey: string;

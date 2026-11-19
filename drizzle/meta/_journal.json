@@ -29,6 +29,13 @@
       "when": 1795119147950,
       "tag": "0003_presensi",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795121758778,
+      "tag": "0004_informasi",
+      "breakpoints": true
     }
   ]
 }

@@ -13,13 +13,20 @@ import { type FormEvent, useMemo, useState } from "react";
 import type { Agenda } from "../../shared/types";
 import { ListSkeleton } from "../components/MasterList";
 import { Card, PageHeader } from "../components/Page";
+import {
+  fromSasaran,
+  type SasaranDraft,
+  SasaranEditor,
+  sasaranLengkap,
+  toSasaran,
+} from "../components/SasaranEditor";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 import { monthOf, tglDate, useHariIni } from "../lib/presensi";
-import { HARI, kelasLabel, useKelas, useLokasi, useUnits } from "../lib/sekolah";
+import { HARI, useKelas, useLokasi, useUnits } from "../lib/sekolah";
 import { Button } from "../ui/Button";
-import { Checkbox, ErrorAlert, Field, Input, inputClass, Textarea } from "../ui/Field";
+import { Checkbox, ErrorAlert, Field, Input, Textarea } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 import { Badge } from "./sekolah";
 
@@ -41,26 +48,31 @@ export function InformasiPage() {
           </Card>
         </Link>
         {[
-          { icon: Megaphone, title: "Pengumuman" },
-          { icon: Bell, title: "Notifikasi" },
-        ].map(({ icon: Icon, title }) => (
-          <Card key={title} className="flex items-center gap-4 opacity-70">
-            <span className="grid size-12 shrink-0 place-items-center rounded-full bg-surface-muted text-text2">
-              <Icon size={22} />
-            </span>
-            <div>
-              <p className="font-semibold">{title}</p>
-              <p className="text-sm text-text2">Segera hadir (M4)</p>
-            </div>
-          </Card>
+          {
+            to: "/informasi/pengumuman" as const,
+            icon: Megaphone,
+            title: "Pengumuman",
+            desc: "Dari sekolah & guru",
+          },
+          { to: "/notifikasi" as const, icon: Bell, title: "Notifikasi", desc: "Kotak masuk Anda" },
+        ].map(({ to, icon: Icon, title, desc }) => (
+          <Link key={to} to={to} className="group">
+            <Card className="flex h-full items-center gap-4 transition-colors group-hover:border-primary">
+              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-soft text-on-soft">
+                <Icon size={22} />
+              </span>
+              <div className="flex-1">
+                <p className="font-semibold">{title}</p>
+                <p className="text-sm text-text2">{desc}</p>
+              </div>
+              <ChevronRight className="text-text2" />
+            </Card>
+          </Link>
         ))}
       </div>
     </>
   );
 }
-
-type Tipe = "semua" | "unit" | "lokasi" | "kelas";
-type SasaranDraft = { tipe: Tipe; id: string };
 
 function useSasaranLabel() {
   const units = useUnits();
@@ -77,24 +89,13 @@ function useSasaranLabel() {
 }
 
 function AgendaForm({ agenda, onDone }: { agenda: Agenda | null; onDone: () => void }) {
-  const units = useUnits();
-  const lokasi = useLokasi();
-  const kelas = useKelas();
   const [judul, setJudul] = useState(agenda?.judul ?? "");
   const [deskripsi, setDeskripsi] = useState(agenda?.deskripsi ?? "");
   const [mulai, setMulai] = useState(agenda?.mulai ?? "");
   const [selesai, setSelesai] = useState(agenda?.selesai ?? "");
   const [libur, setLibur] = useState(agenda?.libur ?? false);
   const [targets, setTargets] = useState<SasaranDraft[]>(
-    agenda?.sasaran.map((s) =>
-      s.kelasId
-        ? { tipe: "kelas", id: s.kelasId }
-        : s.unitId
-          ? { tipe: "unit", id: s.unitId }
-          : s.lokasiId
-            ? { tipe: "lokasi", id: s.lokasiId }
-            : { tipe: "semua", id: "" },
-    ) ?? [{ tipe: "semua", id: "" }],
+    agenda ? fromSasaran(agenda.sasaran) : [{ tipe: "semua", id: "" }],
   );
   const [error, setError] = useState("");
   const done = async () => {
@@ -110,11 +111,7 @@ function AgendaForm({ agenda, onDone }: { agenda: Agenda | null; onDone: () => v
         mulai,
         selesai: selesai || mulai,
         libur,
-        sasaran: targets.map((t) => ({
-          unitId: t.tipe === "unit" ? t.id : null,
-          lokasiId: t.tipe === "lokasi" ? t.id : null,
-          kelasId: t.tipe === "kelas" ? t.id : null,
-        })),
+        sasaran: toSasaran(targets),
       };
       return agenda
         ? api(`/agenda/${agenda.id}`, { method: "PATCH", body })
@@ -127,18 +124,11 @@ function AgendaForm({ agenda, onDone }: { agenda: Agenda | null; onDone: () => v
     mutationFn: () => api(`/agenda/${agenda?.id}`, { method: "DELETE" }),
     onSuccess: done,
   });
-  const options: Record<Tipe, { value: string; label: string }[]> = {
-    semua: [],
-    unit: units.data?.map((u) => ({ value: u.id, label: `${u.kode} · ${u.nama}` })) ?? [],
-    lokasi: lokasi.data?.map((l) => ({ value: l.id, label: l.nama })) ?? [],
-    kelas: kelas.data?.map((k) => ({ value: k.id, label: kelasLabel(k) })) ?? [],
-  };
 
   function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (targets.some((t) => t.tipe !== "semua" && !t.id))
-      return setError("Lengkapi pilihan sasaran");
+    if (!sasaranLengkap(targets)) return setError("Lengkapi pilihan sasaran");
     save.mutate();
   }
 
@@ -184,61 +174,7 @@ function AgendaForm({ agenda, onDone }: { agenda: Agenda | null; onDone: () => v
         checked={libur}
         onChange={(e) => setLibur(e.target.checked)}
       />
-      <fieldset className="space-y-2">
-        <legend className="mb-1 text-sm font-semibold">Sasaran</legend>
-        {targets.map((t, i) => (
-          <div key={i} className="flex flex-wrap gap-2">
-            <select
-              aria-label={`Jenis sasaran ${i + 1}`}
-              className={`${inputClass} w-auto`}
-              value={t.tipe}
-              onChange={(e) =>
-                setTargets((ts) =>
-                  ts.map((x, j) => (j === i ? { tipe: e.target.value as Tipe, id: "" } : x)),
-                )
-              }
-            >
-              <option value="semua">Seluruh sekolah</option>
-              <option value="unit">Unit</option>
-              <option value="lokasi">Lokasi</option>
-              <option value="kelas">Kelas</option>
-            </select>
-            {t.tipe !== "semua" && (
-              <select
-                aria-label={`Pilih ${t.tipe}`}
-                className={`${inputClass} min-w-0 flex-1`}
-                value={t.id}
-                onChange={(e) =>
-                  setTargets((ts) => ts.map((x, j) => (j === i ? { ...x, id: e.target.value } : x)))
-                }
-              >
-                <option value="">Pilih…</option>
-                {options[t.tipe].map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            )}
-            {targets.length > 1 && (
-              <button
-                type="button"
-                aria-label="Hapus sasaran"
-                className="grid size-11 place-items-center rounded-full text-danger hover:bg-danger-soft"
-                onClick={() => setTargets((ts) => ts.filter((_, j) => j !== i))}
-              >
-                <Trash2 size={18} />
-              </button>
-            )}
-          </div>
-        ))}
-        <Button
-          variant="secondary"
-          onClick={() => setTargets((ts) => [...ts, { tipe: "unit", id: "" }])}
-        >
-          <Plus size={16} /> Tambah sasaran
-        </Button>
-      </fieldset>
+      <SasaranEditor value={targets} onChange={setTargets} />
       <ErrorAlert>{error}</ErrorAlert>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         {agenda ? (

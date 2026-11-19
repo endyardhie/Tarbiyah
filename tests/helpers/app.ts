@@ -22,18 +22,23 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
   const t = await createTestDb();
   const config: AppConfig = {
     version: "test",
+    encryptionKey: Buffer.alloc(32, 9).toString("base64"),
     appUrl: ORIGIN,
     trustCloudflare: false,
     turnstileSiteKey: "site",
     ...overrides,
   };
   const scheduled: { name: string; tz: string }[] = [];
+  const jobs: { name: string; data?: unknown }[] = [];
   const boss =
     overrides.boss ??
     ({
       getQueue: async () => ({}),
       schedule: async (name: string, _cron: string, _data: unknown, opts: { tz: string }) => {
         scheduled.push({ name, tz: opts.tz });
+      },
+      insert: async (list: { name: string; data?: unknown }[]) => {
+        jobs.push(...list);
       },
     } as unknown as PgBoss);
   const storageDir = mkdtempSync(join(tmpdir(), "tarbiyah-test-"));
@@ -107,7 +112,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     rmSync(storageDir, { recursive: true, force: true });
   }
 
-  return { ...t, drop, app, req, login, makeUser, roleId, scheduled, clock };
+  return { ...t, drop, app, req, login, makeUser, roleId, scheduled, clock, jobs };
 }
 
 export type TestContext = Awaited<ReturnType<typeof createTestContext>>;

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Permission } from "../../shared/permissions";
 import type { Me } from "../../shared/types";
 import { ApiError, api, queryClient } from "./api";
+import { disablePush } from "./push";
 
 export function useMe() {
   return useQuery({
@@ -25,7 +26,10 @@ export function hasPermission(me: Me | null | undefined, permission: Permission)
 
 export function useLogout() {
   return useMutation({
-    mutationFn: () => api("/auth/logout", { method: "POST" }),
+    mutationFn: async () => {
+      await disablePush();
+      await api("/auth/logout", { method: "POST" });
+    },
     onSettled: () => {
       queryClient.clear();
       queryClient.setQueryData(["me"], null);

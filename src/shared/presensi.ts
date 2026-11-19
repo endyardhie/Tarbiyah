@@ -50,3 +50,15 @@ export const agendaSchema = z
     sasaran: z.array(sasaranSchema).min(1, "Pilih minimal satu sasaran").max(30),
   })
   .refine((v) => v.selesai >= v.mulai, { message: "Tanggal selesai tidak boleh sebelum mulai" });
+
+export const pengumumanSchema = z.object({
+  judul: z.string().trim().min(1, "Judul wajib diisi").max(120),
+  isi: z.string().trim().min(1, "Isi wajib diisi").max(5000),
+  sasaran: z.array(sasaranSchema).min(1, "Pilih minimal satu sasaran").max(30),
+  kirimNotifikasi: z.boolean().default(true),
+});
+
+export const langgananSchema = z.object({
+  endpoint: z.url().refine((u) => u.startsWith("https://"), "Endpoint push harus https"),
+  keys: z.object({ p256dh: z.string().min(10).max(200), auth: z.string().min(8).max(100) }),
+});

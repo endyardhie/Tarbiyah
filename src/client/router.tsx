@@ -19,9 +19,11 @@ import { CetakPresensiPage } from "./routes/cetak";
 import { ImporPage } from "./routes/impor";
 import { InformasiPage, KalenderPage } from "./routes/informasi";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
+import { AktifkanNotifikasiPage, NotifikasiPage } from "./routes/notifikasi";
 import { PengajaranPage } from "./routes/pengajaran";
 import { PengaturanPage } from "./routes/pengaturan";
 import { PenggunaPage } from "./routes/pengguna";
+import { PengumumanPage } from "./routes/pengumuman";
 import { PresensiPage } from "./routes/presensi";
 import { RolePage } from "./routes/role";
 import { SantriPage } from "./routes/santri";
@@ -114,6 +116,9 @@ const routeTree = rootRoute.addChildren([
     placeholder("/keuangan"),
     page("/informasi", InformasiPage),
     page("/informasi/kalender", KalenderPage),
+    page("/informasi/pengumuman", PengumumanPage),
+    page("/notifikasi", NotifikasiPage),
+    page("/notifikasi/aktifkan", AktifkanNotifikasiPage),
     page("/sekolah", SekolahPage),
     page("/sekolah/santri", SantriPage),
     page("/sekolah/wali", WaliPage),

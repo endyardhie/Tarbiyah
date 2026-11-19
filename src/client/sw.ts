@@ -29,3 +29,36 @@ registerRoute(
 
 sw.addEventListener("install", () => void sw.skipWaiting());
 sw.addEventListener("activate", (e) => e.waitUntil(sw.clients.claim()));
+
+// Web Push: tampilkan notifikasi dari server (judul, isi, ikon lembaga, tautan).
+sw.addEventListener("push", (e) => {
+  let d: Record<string, string> = {};
+  try {
+    d = e.data?.json() ?? {};
+  } catch {
+    // payload bukan JSON: tampilkan notifikasi umum
+  }
+  e.waitUntil(
+    sw.registration.showNotification(d.judul || "Pemberitahuan baru", {
+      body: d.isi,
+      icon: d.icon,
+      badge: d.icon,
+      tag: d.tag,
+      data: { url: d.url },
+    }),
+  );
+});
+
+// Klik notifikasi: buka halaman terkait (hanya path di aplikasi ini), pakai jendela yang sudah ada.
+sw.addEventListener("notificationclick", (e) => {
+  e.notification?.close();
+  const path = e.notification?.data?.url;
+  const url = new URL(path?.startsWith("/") ? path : "/notifikasi", sw.location.origin).href;
+  e.waitUntil(
+    sw.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const win = list.find((w) => w.url.startsWith(sw.location.origin));
+      if (win) return win.navigate(url).then(() => win.focus());
+      return sw.clients.openWindow(url);
+    }),
+  );
+});

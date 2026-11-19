@@ -26,7 +26,10 @@ await ensureDefaultRoles(db);
 
 const boss = createBoss(env.DATABASE_URL);
 await boss.start();
-await registerJobs(boss, db, await schoolTimeZone(db));
+await registerJobs(boss, db, await schoolTimeZone(db), {
+  encryptionKey: env.APP_ENCRYPTION_KEY,
+  appUrl: env.APP_URL,
+});
 
 const app = createApp({
   db,
@@ -34,6 +37,7 @@ const app = createApp({
   boss,
   config: {
     version: env.APP_VERSION,
+    encryptionKey: env.APP_ENCRYPTION_KEY,
     appUrl: env.APP_URL,
     trustCloudflare: env.TRUST_CLOUDFLARE,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY,

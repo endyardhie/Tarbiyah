@@ -4,6 +4,7 @@ import { Bell, LayoutGrid, LogOut, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { useLogout, useMe } from "../lib/auth";
 import { mobileNav, type NavItem, visibleNav } from "../lib/nav";
+import { useJumlahNotif } from "../lib/push";
 import { usePublicConfig } from "../lib/sekolah";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -29,6 +30,19 @@ function Brand({ compact = false }: { compact?: boolean }) {
         </span>
       )}
     </div>
+  );
+}
+
+/** Penanda jumlah belum dibaca (disembunyikan dari pembaca layar; label tautan sudah menyebutkannya). */
+function Badge({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <span
+      aria-hidden
+      className="absolute -top-1.5 -right-2 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-[10px] leading-none font-bold text-white"
+    >
+      {n > 99 ? "99+" : n}
+    </span>
   );
 }
 
@@ -127,6 +141,7 @@ function MobileNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: me } = useMe();
   const items = mobileNav(me);
+  const belum = useJumlahNotif().data?.belum ?? 0;
   const inMenu = !items.some((i) => (i.to === "/" ? pathname === "/" : pathname.startsWith(i.to)));
 
   return (
@@ -143,7 +158,10 @@ function MobileNav() {
             className={navItemClass}
             activeProps={{ className: activeClass }}
           >
-            <Icon size={22} strokeWidth={1.8} />
+            <span className="relative">
+              <Icon size={22} strokeWidth={1.8} />
+              {to === "/notifikasi" && <Badge n={belum} />}
+            </span>
             <span className="w-full truncate text-center text-[11px] leading-tight font-semibold max-[359px]:text-[10px]">
               {label}
             </span>
@@ -163,17 +181,19 @@ function MobileNav() {
 
 function TopActions() {
   const { data: me } = useMe();
+  const belum = useJumlahNotif().data?.belum ?? 0;
   const initial = (me?.user.namaPanggilan || me?.user.nama || "?").charAt(0).toUpperCase();
   return (
     <div className="flex items-center gap-2">
       <ThemeToggle />
       <Link
-        to="/informasi"
-        aria-label="Notifikasi"
+        to="/notifikasi"
+        aria-label={belum ? `Notifikasi, ${belum} belum dibaca` : "Notifikasi"}
         title="Notifikasi"
-        className="grid size-11 place-items-center rounded-full border border-border bg-surface-raised text-text transition-colors hover:bg-surface-muted"
+        className="relative grid size-11 place-items-center rounded-full border border-border bg-surface-raised text-text transition-colors hover:bg-surface-muted"
       >
         <Bell size={20} />
+        <Badge n={belum} />
       </Link>
       <Link
         to="/profil"

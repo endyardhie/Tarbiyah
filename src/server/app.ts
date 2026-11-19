@@ -12,6 +12,7 @@ import { agendaRoutes } from "./routes/agenda";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
 import { imporRoutes } from "./routes/impor";
+import { notifikasiRoutes, pengumumanRoutes, pushRoutes } from "./routes/informasi";
 import { meRoutes } from "./routes/me";
 import { fileRoutes, pengaturanRoutes, servePublicFile } from "./routes/pengaturan";
 import { presensiRoutes } from "./routes/presensi";
@@ -77,6 +78,9 @@ export function createApp(deps: AppDeps) {
     .route("/files", fileRoutes(deps))
     .route("/presensi", presensiRoutes(deps))
     .route("/agenda", agendaRoutes(deps))
+    .route("/notifikasi", notifikasiRoutes(deps))
+    .route("/pengumuman", pengumumanRoutes(deps))
+    .route("/push", pushRoutes(deps))
     .all("*", (c) => c.json({ error: "Tidak ditemukan" }, 404));
 
   const app = new Hono().route("/api", api).onError((err, c) => {
