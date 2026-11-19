@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Terang: putih gading hangat, tidak silau. */
+:root {
+  color-scheme: light;
+  --bg: #f5f4ee;
+  --surface: #fbfaf6;
+  --surface-raised: #fefdf9;
+  --surface-muted: #eeede6;
+  --text: #1c2420;
+  --text2: #59615c;
+  --border: #e2dfd6;
+  --primary: #15803d;
+  --primary-hover: #116932;
+  --on-primary: #ffffff;
+  --soft: #dcefdf;
+  --on-soft: #14532d;
+  --lime: #c7e96b;
+  --warn: #b45309;
+  --warn-soft: #fdf0c8;
+  --danger: #b91c1c;
+  --danger-soft: #fde2e0;
+  --info: #1d4ed8;
+  --info-soft: #dce7fd;
+  --focus: #15803d;
+  --shadow: 0 1px 2px rgb(28 36 32 / 0.04), 0 8px 24px rgb(28 36 32 / 0.06);
+}
+
+/* Gelap: arang kehijauan, dirancang terpisah (bukan dibalik). */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1512;
+  --surface: #161e1a;
+  --surface-raised: #1c2620;
+  --surface-muted: #222d27;
+  --text: #e7ede9;
+  --text2: #a3afa8;
+  --border: #2a3630;
+  --primary: #4ade80;
+  --primary-hover: #6ee79a;
+  --on-primary: #052e16;
+  --soft: #173a26;
+  --on-soft: #a7f3c0;
+  --lime: #bef264;
+  --warn: #fbbf24;
+  --warn-soft: #3a2e10;
+  --danger: #f87171;
+  --danger-soft: #3b1a1a;
+  --info: #60a5fa;
+  --info-soft: #172a45;
+  --focus: #4ade80;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-muted: var(--surface-muted);
+  --color-text: var(--text);
+  --color-text2: var(--text2);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-soft: var(--soft);
+  --color-on-soft: var(--on-soft);
+  --color-lime: var(--lime);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --shadow-soft: var(--shadow);
+  --radius-card: 24px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

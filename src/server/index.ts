@@ -1,0 +1,47 @@
+import { serve } from "@hono/node-server";
+import { createApp } from "./app";
+import { createDb, runMigrations } from "./db/client";
+import { parseEnv } from "./env";
+import { createBoss } from "./jobs/boss";
+import { registerJobs } from "./jobs/schedules";
+
+let env: ReturnType<typeof parseEnv>;
+try {
+  env = parseEnv();
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
+
+const { db, pool } = createDb(env.DATABASE_URL);
+console.log("Menjalankan migrasi…");
+await runMigrations(db);
+
+const boss = createBoss(env.DATABASE_URL);
+await boss.start();
+await registerJobs(boss, env.TZ);
+
+const app = createApp({
+  pool,
+  boss,
+  version: env.APP_VERSION,
+  timeZone: env.TZ,
+  staticDir: "dist/client",
+});
+
+const server = serve({ fetch: app.fetch, port: env.PORT }, (info) =>
+  console.log(`TARBIYAH ${env.APP_VERSION} berjalan di port ${info.port}`),
+);
+
+let stopping = false;
+async function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal} diterima, berhenti dengan rapi…`);
+  server.close();
+  await boss.stop({ graceful: true, wait: true, timeout: 20_000 });
+  await pool.end();
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

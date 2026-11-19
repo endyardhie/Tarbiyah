@@ -1,0 +1,80 @@
+# Deploy TARBIYAH di Coolify
+
+Image dibangun oleh GitHub Actions (`.github/workflows/docker.yml`) dan disimpan di GHCR. Server
+Coolify **hanya menarik dan menjalankan** image — tidak pernah build.
+
+| Pemicu | Image | Deploy |
+| --- | --- | --- |
+| push ke `main` | `ghcr.io/<owner>/tarbiyah:main` | webhook staging |
+| tag `v1.2.3` | `ghcr.io/<owner>/tarbiyah:1.2.3` dan `:1.2` | webhook production |
+
+## Staging
+
+### 1. Database
+
+Di resource PostgreSQL 17 (lihat Persiapan di rancangan), buat database `tarbiyah_staging` dengan
+user sendiri. Catat connection string internalnya, mis.
+`postgres://tarbiyah_staging:<password>@<nama-service-postgres>:5432/tarbiyah_staging`.
+
+### 2. Akses Coolify ke GHCR (registry privat)
+
+1. Di GitHub: **Settings → Developer settings → Personal access tokens → Tokens (classic)**, buat
+   token dengan scope **`read:packages`** saja.
+2. Di server, sebagai user yang menjalankan Docker untuk Coolify:
+   `docker login ghcr.io -u <username-github>` lalu tempel token sebagai password.
+   (Atau, bila versi Coolify Anda punya menu registry, tambahkan `ghcr.io` di sana.)
+
+### 3. Buat aplikasi
+
+1. Coolify → **+ New → Docker Image**.
+2. Image: `ghcr.io/<owner>/tarbiyah:main`.
+3. Port yang diekspos: **3000**.
+4. Domain: `https://staging.<domain>`.
+5. Network: hubungkan ke jaringan Docker yang sama dengan PostgreSQL (dan nanti GOWA & noken-pay).
+
+### 4. Environment variables
+
+| Nama | Isi staging | Catatan |
+| --- | --- | --- |
+| `NODE_ENV` | `staging` | `production` untuk production (seed ditolak) |
+| `APP_URL` | `https://staging.<domain>` | tanpa garis miring di akhir |
+| `DATABASE_URL` | connection string langkah 1 | alamat internal |
+| `APP_ENCRYPTION_KEY` | hasil `openssl rand -base64 32` | tandai **secret**; simpan juga di pengelola password. Staging & production **berbeda** |
+| `TURNSTILE_SITE_KEY` | dari widget Turnstile | |
+| `TURNSTILE_SECRET_KEY` | dari widget Turnstile | tandai secret |
+| `TRUST_CLOUDFLARE` | `true` | hanya bila port 80/443 server menerima IP Cloudflare saja |
+| `SEED_ADMIN_PHONE` | nomor admin awal | dipakai mulai M1 (`pnpm db:seed`) |
+| `SEED_ADMIN_PASSWORD` | password sementara | tandai secret; ganti setelah login pertama |
+
+Sudah diisi oleh image (tidak perlu diubah): `PORT=3000`, `DATA_DIR=/data`, `TZ=Asia/Jayapura`,
+`NODE_OPTIONS=--max-old-space-size=384`, `APP_VERSION=<commit SHA>`.
+
+### 5. Penyimpanan & sumber daya
+
+- **Persistent storage**: volume ke path container **`/data`** (logo, lampiran, backup lokal).
+- **Batas memori**: 384 MB untuk staging (production 512 MB). Di Coolify: *Resource Limits →
+  Maximum Memory Limit*.
+- **Health check**: image sudah punya `HEALTHCHECK` ke `/api/health`. Bila Coolify meminta isian:
+  path `/api/health`, port `3000`.
+
+### 6. Webhook deploy
+
+1. Di aplikasi staging Coolify: **Webhooks** → salin *Deploy Webhook* URL.
+2. Coolify → **Keys & Tokens → API tokens**: buat token dengan izin *deploy*.
+3. Di GitHub repo: **Settings → Secrets and variables → Actions**, tambahkan:
+   - `COOLIFY_WEBHOOK_STAGING` = URL webhook staging
+   - `COOLIFY_TOKEN` = API token Coolify
+4. Push ke `main` → workflow *Docker* build & push image lalu memanggil webhook.
+   Selama secret belum diisi, langkah deploy dilewati (workflow tetap hijau).
+
+### 7. Cek
+
+- `https://staging.<domain>/api/health` → `{"ok":true, "db":true, "boss":true, ...}` dan `versi`
+  sama dengan commit terakhir.
+- Log container: `Menjalankan migrasi…` lalu `TARBIYAH <sha> berjalan di port 3000`.
+- Status health di Coolify hijau.
+- Pasang cek uptime (mis. UptimeRobot) ke `/api/health`.
+
+## Production
+
+Dilengkapi di M7.

@@ -1,0 +1,19 @@
+# Development lokal: `docker compose up -d db`
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tarbiyah
+      POSTGRES_PASSWORD: tarbiyah
+      POSTGRES_DB: tarbiyah
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tarbiyah"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:
