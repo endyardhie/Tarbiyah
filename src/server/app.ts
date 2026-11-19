@@ -9,6 +9,7 @@ import { type AppDeps, type AppEnv, fail } from "./lib/context";
 import { safeError } from "./lib/log";
 import { findSession, loadAuthUser, readSessionToken, setSessionCookie } from "./lib/session";
 import { agendaRoutes } from "./routes/agenda";
+import { akademikRoutes, penilaianRoutes, raporRoutes, tugasRoutes } from "./routes/akademik";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
 import { imporRoutes } from "./routes/impor";
@@ -29,13 +30,16 @@ export function createApp(deps: AppDeps) {
   const appOrigin = new URL(config.appUrl).origin;
 
   const api = new Hono<AppEnv>()
-    // Body JSON dibaca utuh ke memori; batasi agar container 512 MB aman. Unggahan berkas punya batas sendiri (M5).
-    .use(
-      bodyLimit({
-        maxSize: 1024 * 1024,
+    // Body dibaca utuh ke memori; batasi agar container 512 MB aman. Unggah logo & lampiran: 6 MB
+    // (batas per jenis berkas dicek lagi di route-nya).
+    .use((c, next) => {
+      const unggah =
+        c.req.path === "/api/pengaturan/logo" || /^\/api\/tugas\/[^/]+\/lampiran$/.test(c.req.path);
+      return bodyLimit({
+        maxSize: unggah ? 6 * 1024 * 1024 : 1024 * 1024,
         onError: (c) => c.json({ error: "Data terlalu besar" }, 413),
-      }),
-    )
+      })(c, next);
+    })
     .use(async (c, next) => {
       c.set("ip", clientIp(c, config.trustCloudflare));
       // Cegah CSRF: request yang mengubah data harus datang dari APP_URL.
@@ -81,6 +85,10 @@ export function createApp(deps: AppDeps) {
     .route("/notifikasi", notifikasiRoutes(deps))
     .route("/pengumuman", pengumumanRoutes(deps))
     .route("/push", pushRoutes(deps))
+    .route("/tugas", tugasRoutes(deps))
+    .route("/penilaian", penilaianRoutes(deps))
+    .route("/akademik", akademikRoutes(deps))
+    .route("/rapor", raporRoutes(deps))
     .all("*", (c) => c.json({ error: "Tidak ditemukan" }, 404));
 
   const app = new Hono().route("/api", api).onError((err, c) => {

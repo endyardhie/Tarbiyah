@@ -5,8 +5,10 @@ import {
   useId,
 } from "react";
 
-export const inputClass =
-  "min-h-12 w-full rounded-2xl border border-border bg-surface-raised px-4 text-text placeholder:text-text2/70 transition-colors focus:border-primary focus:outline-none disabled:opacity-60";
+/** Gaya input tanpa lebar — pakai ini bila memberi lebar tetap (w-24, w-auto, …). */
+export const inputBase =
+  "min-h-12 rounded-2xl border border-border bg-surface-raised px-4 text-text placeholder:text-text2/70 transition-colors focus:border-primary focus:outline-none disabled:opacity-60";
+export const inputClass = `${inputBase} w-full`;
 
 export function Field({
   label,

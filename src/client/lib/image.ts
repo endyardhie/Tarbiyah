@@ -42,3 +42,25 @@ export async function makeLogoSet(file: File) {
     ikonMaskable: await square(img, 512, 0.7, "#ffffff"),
   };
 }
+
+/**
+ * Kecilkan foto sebelum diunggah: lebar maks 1600 px, WebP (atau JPEG) kualitas ±0,8,
+ * diturunkan bertahap sampai ±300 KB. PDF dan berkas lain dikirim apa adanya.
+ */
+export async function compressPhoto(file: File): Promise<File> {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+  const img = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / img.width);
+  const c = document.createElement("canvas");
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
+  c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+  const webp = (await toBlob(c, "image/webp", 0.8)).type === "image/webp";
+  const type = webp ? "image/webp" : "image/jpeg";
+  let blob = await toBlob(c, type, 0.8);
+  for (const q of [0.7, 0.6, 0.5]) {
+    if (blob.size <= 300 * 1024) break;
+    blob = await toBlob(c, type, q);
+  }
+  return new File([blob], file.name.replace(/\.\w+$/, webp ? ".webp" : ".jpg"), { type });
+}

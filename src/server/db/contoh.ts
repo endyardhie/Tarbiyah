@@ -9,8 +9,11 @@ import {
   kelas,
   lokasi,
   mapel,
+  nilai,
   pendaftaran,
   pengajaran,
+  penilaian,
+  raporAspek,
   roles,
   santri,
   santriWali,
@@ -333,5 +336,83 @@ export async function createSampleData(db: Db) {
       wali: waliFlat.length,
       guru: guru.length,
     };
+  });
+}
+
+/**
+ * Nilai contoh untuk satu kelas (semester aktif) + aspek rapor bawaan tiap unit, agar alur rapor
+ * (isi → kunci → cetak) bisa langsung dicoba. Ditandai dengan pengaturan `data_contoh_nilai`.
+ */
+export async function createSampleNilai(db: Db) {
+  const [done] = await db.select().from(settings).where(eq(settings.key, "data_contoh_nilai"));
+  if (done) return null;
+  const [sem] = await db.select().from(semester).where(eq(semester.aktif, true));
+  if (!sem) return null;
+  const allUnits = await db.select().from(units);
+  return db.transaction(async (tx) => {
+    await tx
+      .insert(settings)
+      .values({ key: "data_contoh_nilai", value: { dibuatAt: new Date().toISOString() } });
+    for (const u of allUnits) {
+      await tx.insert(raporAspek).values([
+        { unitId: u.id, kelompok: "Sikap", nama: "Akhlak", tipe: "predikat" as const, urutan: 0 },
+        {
+          unitId: u.id,
+          kelompok: "Sikap",
+          nama: "Kedisiplinan",
+          tipe: "predikat" as const,
+          urutan: 1,
+        },
+        {
+          unitId: u.id,
+          kelompok: "Sikap",
+          nama: "Kebersihan",
+          tipe: "predikat" as const,
+          urutan: 2,
+        },
+        {
+          unitId: u.id,
+          kelompok: "Hafalan",
+          nama: "Hafalan Juz 30",
+          tipe: "teks" as const,
+          urutan: 3,
+        },
+      ]);
+    }
+    // Kelas pertama yang punya santri di tahun ajaran semester aktif.
+    const [k] = await tx
+      .select({ id: kelas.id })
+      .from(kelas)
+      .innerJoin(pendaftaran, eq(pendaftaran.kelasId, kelas.id))
+      .where(eq(kelas.tahunAjaranId, sem.tahunAjaranId))
+      .orderBy(kelas.nama)
+      .limit(1);
+    if (!k) return null;
+    const ajar = await tx.select().from(pengajaran).where(eq(pengajaran.kelasId, k.id));
+    const siswa = await tx.select().from(pendaftaran).where(eq(pendaftaran.kelasId, k.id));
+    const plan = [
+      { jenis: "PR" as const, judul: "PR 1", tanggal: "2026-08-10" },
+      { jenis: "UH" as const, judul: "Ulangan Harian 1", tanggal: "2026-08-24" },
+      { jenis: "UH" as const, judul: "Ulangan Harian 2", tanggal: "2026-09-21" },
+      { jenis: "UTS" as const, judul: "UTS", tanggal: "2026-10-05" },
+      { jenis: "UAS" as const, judul: "UAS", tanggal: "2026-12-07" },
+    ];
+    for (const p of ajar) {
+      for (const x of plan) {
+        const [pn] = await tx
+          .insert(penilaian)
+          .values({ ...x, pengajaranId: p.id, semesterId: sem.id, dibuatOleh: p.guruId })
+          .returning();
+        if (!pn) continue;
+        await tx.insert(nilai).values(
+          siswa.map((s) => ({
+            penilaianId: pn.id,
+            pendaftaranId: s.id,
+            nilai: 65 + Math.floor(rand() * 34),
+          })),
+        );
+      }
+    }
+    return { kelasId: k.id, mapel: ajar.length, santri: siswa.length };
   });
 }

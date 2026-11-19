@@ -1,10 +1,11 @@
 import { Readable } from "node:stream";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { identitasSchema } from "../../shared/sekolah";
-import { berkas } from "../db/schema";
+import { berkas, pendaftaran, pengajaran, tugas } from "../db/schema";
 import { scheduleJobs } from "../jobs/schedules";
 import { audit } from "../lib/audit";
+import { type AuthUser, can } from "../lib/can";
 import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { detectType } from "../lib/file-type";
 import { requirePermission, requireUser } from "../lib/guards";
@@ -146,7 +147,55 @@ export async function servePublicFile(
   });
 }
 
-/** Berkas publik (logo & ikon). Berkas privat menyusul di M5 dengan pengecekan can(). */
+/** Boleh membuka berkas privat? Lampiran tugas: guru/wali kelas/pengajar kelasnya & wali santri kelas itu. */
+async function bolehBerkas(db: AppDeps["db"], user: AuthUser, row: typeof berkas.$inferSelect) {
+  if (user.isAdmin) return true;
+  if (row.rujukanTipe === "tugas" && row.rujukanId) {
+    const [t] = await db
+      .select({ pengajaranId: tugas.pengajaranId, kelasId: pengajaran.kelasId })
+      .from(tugas)
+      .innerJoin(pengajaran, eq(pengajaran.id, tugas.pengajaranId))
+      .where(eq(tugas.id, row.rujukanId));
+    if (!t) return false;
+    if (await can(user, "akademik.lihat", { pengajaranId: t.pengajaranId, kelasId: t.kelasId }))
+      return true;
+    if (!user.relasi.anak.length) return false;
+    const [anak] = await db
+      .select({ id: pendaftaran.id })
+      .from(pendaftaran)
+      .where(
+        and(
+          eq(pendaftaran.kelasId, t.kelasId),
+          eq(pendaftaran.status, "aktif"),
+          inArray(pendaftaran.santriId, user.relasi.anak),
+        ),
+      )
+      .limit(1);
+    return !!anak;
+  }
+  return false;
+}
+
+/**
+ * Berkas lewat route (bukan folder statis): publik (logo/ikon) bebas; privat (lampiran tugas)
+ * wajib login dan lolos pengecekan hak akses.
+ */
 export function fileRoutes(deps: AppDeps) {
-  return new Hono<AppEnv>().get("/:id", (c) => servePublicFile(c, deps, paramId(c)));
+  return new Hono<AppEnv>().get("/:id", async (c) => {
+    const id = paramId(c);
+    const [row] = await deps.db.select().from(berkas).where(eq(berkas.id, id));
+    if (!row) throw fail(404, "Berkas tidak ditemukan");
+    if (row.publik) return servePublicFile(c, deps, id);
+    const user = c.get("user");
+    if (!user) throw fail(401, "Silakan masuk terlebih dahulu");
+    if (!(await bolehBerkas(deps.db, user, row))) throw fail(404, "Berkas tidak ditemukan");
+    const { stream, size } = await deps.storage.get(row.path);
+    return c.body(Readable.toWeb(stream) as ReadableStream, 200, {
+      "Content-Type": row.tipe,
+      "Content-Length": String(size),
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(row.namaAsli)}`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+  });
 }

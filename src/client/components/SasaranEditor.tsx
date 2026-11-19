@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { kelasLabel, useKelas, useLokasi, useUnits } from "../lib/sekolah";
 import { Button } from "../ui/Button";
-import { inputClass } from "../ui/Field";
+import { inputBase, inputClass } from "../ui/Field";
 
 export type Tipe = "semua" | "unit" | "lokasi" | "kelas";
 export type SasaranDraft = { tipe: Tipe; id: string };
@@ -70,7 +70,7 @@ export function SasaranEditor({
           {tipe.length > 1 && (
             <select
               aria-label={`Jenis sasaran ${i + 1}`}
-              className={`${inputClass} w-auto`}
+              className={`${inputBase} w-auto`}
               value={t.tipe}
               onChange={(e) => set(i, { tipe: e.target.value as Tipe, id: "" })}
             >

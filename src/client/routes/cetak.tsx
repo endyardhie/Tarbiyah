@@ -1,5 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
+import { useRef } from "react";
+import type { RaporContext } from "../../shared/rapor-template";
+import { renderTemplate } from "../../shared/template";
 import type { Laporan } from "../../shared/types";
 import { api, errorMessage } from "../lib/api";
 import { useMe } from "../lib/auth";
@@ -97,6 +100,68 @@ export function CetakPresensiPage() {
             H = hadir, S = sakit, I = izin, A = alpa. Dicetak {formatTanggal(new Date())}.
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Cetak rapor: template HTML dari admin dirender (semua nilai di-escape) ke iframe ber-sandbox
+ * tanpa izin script, satu halaman per santri. PDF dari dialog cetak browser.
+ */
+export function CetakRaporPage() {
+  const me = useMe();
+  const qs = window.location.search.slice(1);
+  const q = useQuery({
+    queryKey: ["rapor", "cetak", qs],
+    queryFn: () =>
+      api<{ template: { html: string; css: string }; data: (RaporContext & { status: string })[] }>(
+        `/rapor/cetak?${qs}`,
+      ),
+    enabled: !!me.data,
+  });
+  const frame = useRef<HTMLIFrameElement>(null);
+  if (me.isSuccess && !me.data) return <Navigate to="/login" />;
+  let doc = "";
+  let error = "";
+  if (q.data) {
+    try {
+      const pages = q.data.data
+        .map((d) => `<section class="halaman">${renderTemplate(q.data.template.html, d)}</section>`)
+        .join("");
+      doc = `<!doctype html><html lang="id"><head><meta charset="utf-8"><base href="${window.location.origin}/"><style>${q.data.template.css}
+.halaman { break-after: page; } .halaman:last-child { break-after: auto; }</style></head><body>${pages}</body></html>`;
+    } catch (e) {
+      error = (e as Error).message;
+    }
+  }
+  return (
+    <div className="min-h-dvh bg-surface-muted p-4">
+      <div className="mx-auto mb-3 flex max-w-[210mm] flex-wrap items-center gap-2">
+        <Button disabled={!doc} onClick={() => frame.current?.contentWindow?.print()}>
+          Cetak / Simpan PDF
+        </Button>
+        <Button variant="secondary" onClick={() => window.close()}>
+          Tutup
+        </Button>
+        {q.data && (
+          <span className="text-sm text-text2">
+            {q.data.data.length} rapor
+            {q.data.data.some((d) => d.status !== "final") ? " · ada yang masih DRAFT" : ""}
+          </span>
+        )}
+      </div>
+      {q.isError && <p className="text-danger">{errorMessage(q.error)}</p>}
+      {error && <p className="text-danger">Template rapor bermasalah: {error}</p>}
+      {!q.data && !q.isError && <p>Memuat…</p>}
+      {doc && (
+        <iframe
+          ref={frame}
+          title="Pratinjau rapor"
+          sandbox="allow-same-origin allow-modals"
+          srcDoc={doc}
+          className="mx-auto block h-[80dvh] w-full max-w-[210mm] rounded-xl bg-white shadow-soft"
+        />
       )}
     </div>
   );

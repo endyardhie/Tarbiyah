@@ -24,7 +24,7 @@ import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 import { HARI, hariOptions, useGuru, useLokasi, useTahunAjaran, useUnits } from "../lib/sekolah";
 import { Button } from "../ui/Button";
-import { ErrorAlert, inputClass } from "../ui/Field";
+import { ErrorAlert, inputBase, inputClass } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 
 type HubItem = {
@@ -279,7 +279,7 @@ function LiburMingguan({ canEdit }: { canEdit: boolean }) {
         <div className="flex flex-wrap gap-2">
           <select
             aria-label="Hari"
-            className={`${inputClass} w-auto`}
+            className={`${inputBase} w-auto`}
             value={hari}
             onChange={(e) => setHari(e.target.value)}
           >
@@ -291,7 +291,7 @@ function LiburMingguan({ canEdit }: { canEdit: boolean }) {
           </select>
           <select
             aria-label="Unit"
-            className={`${inputClass} w-auto`}
+            className={`${inputBase} w-auto`}
             value={unitId}
             onChange={(e) => setUnitId(e.target.value)}
           >
@@ -304,7 +304,7 @@ function LiburMingguan({ canEdit }: { canEdit: boolean }) {
           </select>
           <select
             aria-label="Lokasi"
-            className={`${inputClass} w-auto`}
+            className={`${inputBase} w-auto`}
             value={lokasiId}
             onChange={(e) => setLokasiId(e.target.value)}
           >

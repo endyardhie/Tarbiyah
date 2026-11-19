@@ -56,6 +56,21 @@ function relationAllows(r: Relasi, permission: Permission, s: Scope): boolean {
         (!!s.santriId && r.anak.includes(s.santriId)) ||
         (!!s.kelasId && (r.kelasWali.includes(s.kelasId) || r.kelasAjar.includes(s.kelasId)))
       );
+    case "akademik.isi":
+      return !!s.pengajaranId && r.pengajaran.includes(s.pengajaranId);
+    case "akademik.lihat":
+      return (
+        (!!s.pengajaranId && r.pengajaran.includes(s.pengajaranId)) ||
+        (!!s.santriId && r.anak.includes(s.santriId)) ||
+        (!!s.kelasId && (r.kelasWali.includes(s.kelasId) || r.kelasAjar.includes(s.kelasId)))
+      );
+    case "rapor.isi_kelas":
+      return !!s.kelasId && r.kelasWali.includes(s.kelasId);
+    case "rapor.lihat":
+      return (
+        (!!s.santriId && r.anak.includes(s.santriId)) ||
+        (!!s.kelasId && r.kelasWali.includes(s.kelasId))
+      );
     default:
       return false;
   }

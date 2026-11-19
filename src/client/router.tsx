@@ -13,9 +13,10 @@ import { errorMessage } from "./lib/api";
 import { useMe } from "./lib/auth";
 import { type AppPath, NAV_ITEMS } from "./lib/nav";
 import { usePublicConfig } from "./lib/sekolah";
+import { AkademikPage, PengaturanAkademikPage, TemplateRaporPage } from "./routes/akademik";
 import { PerangkatPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
 import { BerandaPage } from "./routes/beranda";
-import { CetakPresensiPage } from "./routes/cetak";
+import { CetakPresensiPage, CetakRaporPage } from "./routes/cetak";
 import { ImporPage } from "./routes/impor";
 import { InformasiPage, KalenderPage } from "./routes/informasi";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
@@ -76,7 +77,6 @@ const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", compo
 
 // Halaman modul yang belum dibangun: judul + keterangan.
 const PLACEHOLDERS: Partial<Record<AppPath, string>> = {
-  "/akademik": "Tugas/PR, penilaian, nilai, dan rapor.",
   "/keuangan": "Tagihan SPP, pembayaran, dan laporan keuangan.",
 };
 
@@ -104,6 +104,7 @@ const routeTree = rootRoute.addChildren([
     path: "/cetak/presensi",
     component: CetakPresensiPage,
   }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/cetak/rapor", component: CetakRaporPage }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/lupa-password",
@@ -112,7 +113,9 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([
     page("/", BerandaPage),
     page("/presensi", PresensiPage),
-    placeholder("/akademik"),
+    page("/akademik", AkademikPage),
+    page("/akademik/pengaturan", PengaturanAkademikPage),
+    page("/akademik/template", TemplateRaporPage),
     placeholder("/keuangan"),
     page("/informasi", InformasiPage),
     page("/informasi/kalender", KalenderPage),

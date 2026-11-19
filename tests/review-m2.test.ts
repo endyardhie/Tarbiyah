@@ -199,7 +199,8 @@ describe("berkas & logo", () => {
         publik: false,
       })
       .returning();
-    expect((await t.app.request(`/api/files/${row?.id}`)).status).toBe(404);
+    expect((await t.app.request(`/api/files/${row?.id}`)).status).toBe(401);
+    expect((await t.req("GET", `/api/files/${row?.id}`, { cookie: guru })).status).toBe(404);
   });
 
   it("unggahan logo lebih dari 6 MB ditolak 413", async () => {
@@ -226,6 +227,13 @@ describe("berkas & logo", () => {
       .from(berkas)
       .where(and(eq(berkas.rujukanTipe, "logo"), eq(berkas.publik, true)));
     expect(logos).toHaveLength(4);
+  });
+
+  it("logo antara 1 MB dan 6 MB diterima batas body (batas per berkas dicek di route)", async () => {
+    const form = new FormData();
+    form.set("logo", png(Buffer.alloc(1_500_000)), "logo.png");
+    for (const f of ["ikon192", "ikon512", "ikonMaskable"]) form.set(f, png(f), `${f}.png`);
+    expect((await upload(form)).status).toBe(200);
   });
 });
 

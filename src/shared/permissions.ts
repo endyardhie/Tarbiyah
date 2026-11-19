@@ -38,6 +38,14 @@ export const RELATION_PERMISSIONS = {
   "presensi.isi": ["presensi.koreksi"],
   /** Lihat presensi/laporan: wali kelas, pengajar kelas itu, wali santri (anaknya). */
   "presensi.lihat": ["presensi.lihat_semua", "presensi.koreksi"],
+  /** Isi tugas & nilai: guru pengajar mapel itu (pengajaranId). */
+  "akademik.isi": [],
+  /** Lihat tugas & nilai: guru (pengajarannya), wali kelas & pengajar (kelasnya), wali santri (anaknya). */
+  "akademik.lihat": ["akademik.lihat_semua"],
+  /** Isi aspek, catatan, keputusan rapor: wali kelas (kelasnya). */
+  "rapor.isi_kelas": [],
+  /** Lihat/cetak rapor: wali kelas (kelasnya), wali santri (anaknya, hanya yang final). */
+  "rapor.lihat": ["rapor.kunci", "akademik.lihat_semua"],
 } as const satisfies Record<string, readonly GrantablePermission[]>;
 export type RelationPermission = keyof typeof RELATION_PERMISSIONS;
 

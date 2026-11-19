@@ -4,7 +4,7 @@ import { normalizePhone } from "../../shared/phone";
 import { ensureDefaultRoles } from "../services/roles";
 import { createFirstAdmin } from "../services/users";
 import { createDb, runMigrations } from "./client";
-import { createSampleData, PASSWORD_CONTOH } from "./contoh";
+import { createSampleData, createSampleNilai, PASSWORD_CONTOH } from "./contoh";
 
 if (process.env.NODE_ENV === "production") {
   console.error("Seed ditolak: NODE_ENV=production. Untuk admin pertama pakai admin-awal.js.");
@@ -38,5 +38,7 @@ if (process.argv.includes("--contoh")) {
       : `Data contoh dibuat: ${r.kelas} kelas, ${r.santri} santri, ${r.wali} wali, ${r.guru} guru. ` +
           `Semua akun contoh berpassword "${PASSWORD_CONTOH}" (nomor 628000…).`,
   );
+  const n = await createSampleNilai(db);
+  if (n) console.log(`Nilai contoh dibuat untuk 1 kelas (${n.santri} santri × ${n.mapel} mapel).`);
 }
 await pool.end();

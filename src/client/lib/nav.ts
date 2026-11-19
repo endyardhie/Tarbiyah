@@ -17,6 +17,8 @@ export type AppPath =
   | "/"
   | "/presensi"
   | "/akademik"
+  | "/akademik/pengaturan"
+  | "/akademik/template"
   | "/keuangan"
   | "/informasi"
   | "/informasi/kalender"
