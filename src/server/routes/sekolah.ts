@@ -25,7 +25,7 @@ import {
 } from "../db/schema";
 import { audit } from "../lib/audit";
 import { can } from "../lib/can";
-import { type AppDeps, type AppEnv, currentUser, fail, paramId } from "../lib/context";
+import { type AppDeps, type AppEnv, currentUser, fail, paramId, queryId } from "../lib/context";
 import { crudRoutes } from "../lib/crud";
 import { requirePermission, requireUser } from "../lib/guards";
 import { assertActiveUser, resolveTahunAjaran } from "../services/sekolah";
@@ -41,6 +41,19 @@ export function sekolahRoutes({ db }: AppDeps) {
       async (c) => {
         const id = paramId(c);
         await db.transaction(async (tx) => {
+          if (table === semester) {
+            // Semester aktif harus milik tahun ajaran aktif.
+            const [row] = await tx
+              .select({ aktif: tahunAjaran.aktif })
+              .from(semester)
+              .innerJoin(tahunAjaran, eq(tahunAjaran.id, semester.tahunAjaranId))
+              .where(eq(semester.id, id));
+            if (!row) throw fail(404, "Data tidak ditemukan");
+            if (!row.aktif) throw fail(400, "Aktifkan tahun ajarannya dulu");
+          } else {
+            // Ganti tahun ajaran → semester tahun lain tidak lagi aktif.
+            await tx.update(semester).set({ aktif: false }).where(ne(semester.tahunAjaranId, id));
+          }
           await tx.update(table).set({ aktif: false }).where(ne(table.id, id));
           const [row] = await tx
             .update(table)
@@ -117,7 +130,7 @@ export function sekolahRoutes({ db }: AppDeps) {
         entitas: "kelas",
         check: (tx, data) => assertActiveUser(tx, data.waliKelasId, "Wali kelas"),
         list: async (c) => {
-          const ta = await resolveTahunAjaran(db, c.req.query("tahunAjaranId"));
+          const ta = await resolveTahunAjaran(db, queryId(c, "tahunAjaranId"));
           if (!ta) return [];
           return db
             .select({
@@ -164,7 +177,7 @@ export function sekolahRoutes({ db }: AppDeps) {
         canDelete: true,
         check: (tx, data) => assertActiveUser(tx, data.guruId, "Guru"),
         list: async (c) => {
-          const ta = await resolveTahunAjaran(db, c.req.query("tahunAjaranId"));
+          const ta = await resolveTahunAjaran(db, queryId(c, "tahunAjaranId"));
           if (!ta) return [];
           const rows = await db
             .select({

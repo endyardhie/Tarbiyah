@@ -57,3 +57,11 @@ export function paramId(c: Context, name = "id"): string {
   if (!id || !uuidSchema.safeParse(id).success) throw fail(404, "Data tidak ditemukan");
   return id;
 }
+
+/** Query ?nama=<uuid> opsional: kosong → undefined, bukan UUID → 400. */
+export function queryId(c: Context, name: string): string | undefined {
+  const v = c.req.query(name);
+  if (!v) return undefined;
+  if (!uuidSchema.safeParse(v).success) throw fail(400, `Parameter ${name} tidak valid`);
+  return v;
+}

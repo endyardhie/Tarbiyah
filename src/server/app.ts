@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -10,7 +12,7 @@ import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
 import { imporRoutes } from "./routes/impor";
 import { meRoutes } from "./routes/me";
-import { fileRoutes, pengaturanRoutes } from "./routes/pengaturan";
+import { fileRoutes, pengaturanRoutes, servePublicFile } from "./routes/pengaturan";
 import { roleRoutes } from "./routes/roles";
 import { santriRoutes, santriWaliRoutes, waliRoutes } from "./routes/santri";
 import { sekolahRoutes } from "./routes/sekolah";
@@ -113,9 +115,13 @@ export function createApp(deps: AppDeps) {
       { "Content-Type": "application/manifest+json" },
     );
   });
+  // iOS mengambil ikon ini saat "Tambah ke Layar Utama": sajikan langsung, tanpa redirect.
   app.get("/apple-touch-icon.png", async (c) => {
     const id = await getIdentitas(db);
-    return c.redirect(id.ikon192Id ? `/api/files/${id.ikon192Id}` : "/icons/icon-192.png", 302);
+    if (id.ikon192Id) return servePublicFile(c, deps, id.ikon192Id);
+    if (!deps.staticDir) return c.notFound();
+    const file = await readFile(join(deps.staticDir, "icons/icon-192.png"));
+    return c.body(file, 200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
   });
 
   if (deps.staticDir) {

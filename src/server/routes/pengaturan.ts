@@ -1,8 +1,9 @@
 import { Readable } from "node:stream";
 import { and, eq } from "drizzle-orm";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { identitasSchema } from "../../shared/sekolah";
 import { berkas } from "../db/schema";
+import { scheduleJobs } from "../jobs/schedules";
 import { audit } from "../lib/audit";
 import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { detectType } from "../lib/file-type";
@@ -17,7 +18,7 @@ const LOGO_FIELDS = {
   ikonMaskable: { max: 1 * MB, types: ["image/png"] },
 } as const;
 
-export function pengaturanRoutes({ db, storage }: AppDeps) {
+export function pengaturanRoutes({ db, storage, boss }: AppDeps) {
   const admin = [requireUser, requirePermission("pengaturan.kelola")] as const;
   return new Hono<AppEnv>()
     .get("/identitas", requireUser, async (c) => c.json(await getIdentitas(db)))
@@ -37,6 +38,8 @@ export function pengaturanRoutes({ db, storage }: AppDeps) {
           ip: c.get("ip"),
         });
       });
+      // Jadwal cron (tagihan, backup, dll.) ikut zona waktu baru tanpa restart.
+      if (after.zonaWaktu !== before.zonaWaktu) await scheduleJobs(boss, after.zonaWaktu);
       return c.json(after);
     })
     .post("/logo", ...admin, async (c) => {
@@ -75,62 +78,75 @@ export function pengaturanRoutes({ db, storage }: AppDeps) {
         stored.push({ ...f, key, size });
       }
       const before = await getIdentitas(db);
-      const after = await db.transaction(async (tx) => {
-        const ids: Record<string, string> = {};
-        for (const f of stored) {
-          const [row] = await tx
-            .insert(berkas)
-            .values({
-              namaAsli: f.name,
-              path: f.key,
-              ukuran: f.size,
-              tipe: f.mime,
-              rujukanTipe: "logo",
-              rujukanId: f.field,
-              publik: true,
-              dibuatOleh: user.id,
-            })
-            .returning({ id: berkas.id });
-          ids[f.field] = row?.id as string;
-        }
-        const next = {
-          ...before,
-          logoId: ids.logo ?? null,
-          ikon192Id: ids.ikon192 ?? null,
-          ikon512Id: ids.ikon512 ?? null,
-          ikonMaskableId: ids.ikonMaskable ?? null,
-        };
-        await saveIdentitas(db, tx, next);
-        await audit(tx, {
-          userId: user.id,
-          aksi: "pengaturan.logo",
-          entitas: "settings",
-          entitasId: "identitas",
-          sebelum: before,
-          sesudah: next,
-          ip: c.get("ip"),
+      const after = await db
+        .transaction(async (tx) => {
+          const ids: Record<string, string> = {};
+          for (const f of stored) {
+            const [row] = await tx
+              .insert(berkas)
+              .values({
+                namaAsli: f.name,
+                path: f.key,
+                ukuran: f.size,
+                tipe: f.mime,
+                rujukanTipe: "logo",
+                rujukanId: f.field,
+                publik: true,
+                dibuatOleh: user.id,
+              })
+              .returning({ id: berkas.id });
+            ids[f.field] = row?.id as string;
+          }
+          const next = {
+            ...before,
+            logoId: ids.logo ?? null,
+            ikon192Id: ids.ikon192 ?? null,
+            ikon512Id: ids.ikon512 ?? null,
+            ikonMaskableId: ids.ikonMaskable ?? null,
+          };
+          await saveIdentitas(db, tx, next);
+          await audit(tx, {
+            userId: user.id,
+            aksi: "pengaturan.logo",
+            entitas: "settings",
+            entitasId: "identitas",
+            sebelum: before,
+            sesudah: next,
+            ip: c.get("ip"),
+          });
+          return next;
+        })
+        .catch(async (e) => {
+          // Berkas yang belum pernah tercatat di DB tidak dipakai siapa pun: hapus agar tidak yatim.
+          await Promise.all(stored.map((f) => storage.delete(f.key).catch(() => {})));
+          throw e;
         });
-        return next;
-      });
       return c.json(after);
     });
 }
 
-/** Berkas publik (logo & ikon). Berkas privat menyusul di M5 dengan pengecekan can(). */
-export function fileRoutes({ db, storage }: AppDeps) {
-  return new Hono<AppEnv>().get("/:id", async (c) => {
-    const [row] = await db
-      .select()
-      .from(berkas)
-      .where(and(eq(berkas.id, paramId(c)), eq(berkas.publik, true)));
-    if (!row) throw fail(404, "Berkas tidak ditemukan");
-    const { stream, size } = await storage.get(row.path);
-    return c.body(Readable.toWeb(stream) as ReadableStream, 200, {
-      "Content-Type": row.tipe,
-      "Content-Length": String(size),
-      // Id berkas unik dan isinya tidak pernah berubah.
-      "Cache-Control": "public, max-age=31536000, immutable",
-      "X-Content-Type-Options": "nosniff",
-    });
+/** Sajikan satu berkas publik dari storage (streaming). */
+export async function servePublicFile(
+  c: Context,
+  { db, storage }: Pick<AppDeps, "db" | "storage">,
+  id: string,
+) {
+  const [row] = await db
+    .select()
+    .from(berkas)
+    .where(and(eq(berkas.id, id), eq(berkas.publik, true)));
+  if (!row) throw fail(404, "Berkas tidak ditemukan");
+  const { stream, size } = await storage.get(row.path);
+  return c.body(Readable.toWeb(stream) as ReadableStream, 200, {
+    "Content-Type": row.tipe,
+    "Content-Length": String(size),
+    // Id berkas unik dan isinya tidak pernah berubah.
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
   });
+}
+
+/** Berkas publik (logo & ikon). Berkas privat menyusul di M5 dengan pengecekan can(). */
+export function fileRoutes(deps: AppDeps) {
+  return new Hono<AppEnv>().get("/:id", (c) => servePublicFile(c, deps, paramId(c)));
 }

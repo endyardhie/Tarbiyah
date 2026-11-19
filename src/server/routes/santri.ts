@@ -4,7 +4,15 @@ import { z } from "zod";
 import { santriSchema, santriWaliSchema, waliSchema } from "../../shared/sekolah";
 import { santriWali } from "../db/schema";
 import { audit } from "../lib/audit";
-import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
+import {
+  type AppDeps,
+  type AppEnv,
+  currentUser,
+  fail,
+  paramId,
+  parseBody,
+  queryId,
+} from "../lib/context";
 import { requirePermission, requireUser } from "../lib/guards";
 import { assertPureWali, getSantri, listSantri, listWali, saveSantri } from "../services/santri";
 import { resolveTahunAjaran } from "../services/sekolah";
@@ -32,8 +40,8 @@ export function santriRoutes({ db }: AppDeps) {
     .get("/", requireUser, async (c) =>
       c.json(
         await listSantri(db, currentUser(c), {
-          tahunAjaranId: await resolveTahunAjaran(db, c.req.query("tahunAjaranId")),
-          kelasId: c.req.query("kelasId") || undefined,
+          tahunAjaranId: await resolveTahunAjaran(db, queryId(c, "tahunAjaranId")),
+          kelasId: queryId(c, "kelasId"),
         }),
       ),
     )

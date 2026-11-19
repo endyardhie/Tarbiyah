@@ -3,6 +3,7 @@ import { normalizePhone } from "../../shared/phone";
 import { type BarisImpor, HUBUNGAN } from "../../shared/sekolah";
 import type { Db } from "../db/client";
 import {
+  auditLog,
   kelas,
   lokasi,
   pendaftaran,
@@ -250,6 +251,17 @@ export async function runImport(
         alamat: clean(r.alamat) || null,
       };
     });
+    // Santri lama: sel CSV yang kosong TIDAK menghapus data yang sudah ada.
+    const before = await tx
+      .select()
+      .from(santri)
+      .where(
+        inArray(
+          santri.nis,
+          santriRows.map((r) => r.nis),
+        ),
+      );
+    const keep = (col: string) => sql.raw(`coalesce(excluded.${col}, santri.${col})`);
     const saved = await tx
       .insert(santri)
       .values(santriRows)
@@ -257,15 +269,45 @@ export async function runImport(
         target: santri.nis,
         set: {
           nama: sql`excluded.nama`,
-          namaPanggilan: sql`excluded.nama_panggilan`,
-          jenisKelamin: sql`excluded.jenis_kelamin`,
-          tempatLahir: sql`excluded.tempat_lahir`,
-          tanggalLahir: sql`excluded.tanggal_lahir`,
-          alamat: sql`excluded.alamat`,
+          namaPanggilan: keep("nama_panggilan"),
+          jenisKelamin: keep("jenis_kelamin"),
+          tempatLahir: keep("tempat_lahir"),
+          tanggalLahir: keep("tanggal_lahir"),
+          alamat: keep("alamat"),
           diubahAt: sql`now()`,
         },
       })
-      .returning({ id: santri.id, nis: santri.nis });
+      .returning();
+
+    // Audit per santri lama yang datanya berubah (bukan hanya ringkasan).
+    const FIELDS = [
+      "nama",
+      "namaPanggilan",
+      "jenisKelamin",
+      "tempatLahir",
+      "tanggalLahir",
+      "alamat",
+    ] as const;
+    const afterByNis = new Map(saved.map((s) => [s.nis, s]));
+    const changed = before.flatMap((b) => {
+      const a = afterByNis.get(b.nis);
+      if (!a) return [];
+      const diff = FIELDS.filter((f) => a[f] !== b[f]);
+      if (!diff.length) return [];
+      const pick = (r: typeof a) => Object.fromEntries(diff.map((f) => [f, r[f]]));
+      return [
+        {
+          userId: actorId,
+          aksi: "santri.ubah_impor",
+          entitas: "santri",
+          entitasId: a.id,
+          sebelum: pick(b),
+          sesudah: pick(a),
+          ip,
+        },
+      ];
+    });
+    if (changed.length) await tx.insert(auditLog).values(changed);
     const idByNis = new Map(saved.map((s) => [s.nis, s.id]));
 
     const daftar = rows.flatMap((r) => {

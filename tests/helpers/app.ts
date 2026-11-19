@@ -25,7 +25,15 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     turnstileSiteKey: "site",
     ...overrides,
   };
-  const boss = overrides.boss ?? ({ getQueue: async () => ({}) } as unknown as PgBoss);
+  const scheduled: { name: string; tz: string }[] = [];
+  const boss =
+    overrides.boss ??
+    ({
+      getQueue: async () => ({}),
+      schedule: async (name: string, _cron: string, _data: unknown, opts: { tz: string }) => {
+        scheduled.push({ name, tz: opts.tz });
+      },
+    } as unknown as PgBoss);
   const app = createApp({
     db: t.db,
     pool: t.pool,
@@ -90,7 +98,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     return role.id;
   }
 
-  return { ...t, app, req, login, makeUser, roleId };
+  return { ...t, app, req, login, makeUser, roleId, scheduled };
 }
 
 export type TestContext = Awaited<ReturnType<typeof createTestContext>>;

@@ -10,6 +10,7 @@ import {
   roles,
   santriWali,
   sessions,
+  tahunAjaran,
   userRoles,
   users,
 } from "../db/schema";
@@ -90,12 +91,20 @@ export async function loadAuthUser(db: Db, userId: string): Promise<AuthUser | n
     .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
     .where(eq(userRoles.userId, userId));
   const roleMap = new Map(rows.map((r) => [r.id, { id: r.id, nama: r.nama, admin: r.admin }]));
+  // Relasi wali kelas & pengajar hanya untuk tahun ajaran aktif: tahun lalu tidak memberi akses
+  // ke data santri bekas kelasnya (riwayat lama tetap bisa dilihat jabatan "lihat semua").
   const [kelasWali, ajar, anak] = await Promise.all([
-    db.select({ id: kelas.id }).from(kelas).where(eq(kelas.waliKelasId, userId)),
+    db
+      .select({ id: kelas.id })
+      .from(kelas)
+      .innerJoin(tahunAjaran, eq(tahunAjaran.id, kelas.tahunAjaranId))
+      .where(and(eq(kelas.waliKelasId, userId), eq(tahunAjaran.aktif, true))),
     db
       .select({ id: pengajaran.id, kelasId: pengajaran.kelasId })
       .from(pengajaran)
-      .where(eq(pengajaran.guruId, userId)),
+      .innerJoin(kelas, eq(kelas.id, pengajaran.kelasId))
+      .innerJoin(tahunAjaran, eq(tahunAjaran.id, kelas.tahunAjaranId))
+      .where(and(eq(pengajaran.guruId, userId), eq(tahunAjaran.aktif, true))),
     db.select({ id: santriWali.santriId }).from(santriWali).where(eq(santriWali.userId, userId)),
   ]);
   return {
