@@ -149,7 +149,12 @@ function WaForm({ data }: { data: PengaturanWaView }) {
         hint="Mis. http://gowa:3000 — jangan dibuka ke internet."
       >
         {(id) => (
-          <Input id={id} value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} />
+          <Input
+            id={id}
+            autoComplete="off"
+            value={v.url}
+            onChange={(e) => setV({ ...v, url: e.target.value })}
+          />
         )}
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -239,7 +244,12 @@ function PembayaranForm({ data }: { data: PengaturanPembayaranView }) {
       </Field>
       <Field label="URL provider (jaringan internal)" hint="Mis. http://noken-pay:3000">
         {(id) => (
-          <Input id={id} value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} />
+          <Input
+            id={id}
+            autoComplete="off"
+            value={v.url}
+            onChange={(e) => setV({ ...v, url: e.target.value })}
+          />
         )}
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -248,7 +258,7 @@ function PembayaranForm({ data }: { data: PengaturanPembayaranView }) {
             <Input
               id={id}
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
               value={v.apiKey}
               onChange={(e) => setV({ ...v, apiKey: e.target.value })}
             />
@@ -259,7 +269,7 @@ function PembayaranForm({ data }: { data: PengaturanPembayaranView }) {
             <Input
               id={id}
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
               value={v.webhookSecret}
               onChange={(e) => setV({ ...v, webhookSecret: e.target.value })}
             />

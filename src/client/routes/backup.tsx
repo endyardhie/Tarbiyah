@@ -108,7 +108,9 @@ function PengaturanForm({ data }: { data: PengaturanBackupView }) {
       />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Endpoint S3" hint="Mis. https://s3.us-east-005.backblazeb2.com">
-          {(id) => <Input id={id} value={v.endpoint} onChange={set("endpoint")} />}
+          {(id) => (
+            <Input id={id} autoComplete="off" value={v.endpoint} onChange={set("endpoint")} />
+          )}
         </Field>
         <Field label="Region">
           {(id) => (
@@ -131,7 +133,7 @@ function PengaturanForm({ data }: { data: PengaturanBackupView }) {
             <Input
               id={id}
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
               value={v.appKey}
               onChange={set("appKey")}
             />
