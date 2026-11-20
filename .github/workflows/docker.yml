@@ -50,7 +50,10 @@ jobs:
           TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           if [ -z "$WEBHOOK" ]; then echo "COOLIFY_WEBHOOK_STAGING belum diisi, deploy dilewati"; exit 0; fi
-          curl -fsS -H "Authorization: Bearer $TOKEN" "$WEBHOOK"
+          # Tampilkan jawaban Coolify (tanpa rahasia) agar penyebab gagal terlihat di log.
+          code=$(curl -sS -o resp.txt -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$WEBHOOK")
+          cat resp.txt; echo
+          [ "$code" -lt 300 ] || { echo "Coolify menjawab HTTP $code"; exit 1; }
       - name: Deploy production (Coolify)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -58,4 +61,7 @@ jobs:
           TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           if [ -z "$WEBHOOK" ]; then echo "COOLIFY_WEBHOOK_PRODUCTION belum diisi, deploy dilewati"; exit 0; fi
-          curl -fsS -H "Authorization: Bearer $TOKEN" "$WEBHOOK"
+          # Tampilkan jawaban Coolify (tanpa rahasia) agar penyebab gagal terlihat di log.
+          code=$(curl -sS -o resp.txt -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$WEBHOOK")
+          cat resp.txt; echo
+          [ "$code" -lt 300 ] || { echo "Coolify menjawab HTTP $code"; exit 1; }
