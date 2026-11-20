@@ -67,12 +67,14 @@ import {
 } from "../services/akademik";
 import { schoolTimeZone } from "../services/pengaturan";
 import { notify } from "../services/push";
+import { assertKelasBukanArsip, PESAN_ARSIP } from "../services/sekolah";
 
 const MB = 1024 * 1024;
 
-async function bolehIsi(user: AuthUser, p: { id: string }) {
+async function bolehIsi(user: AuthUser, p: { id: string; arsip: boolean }) {
   if (!(await can(user, "akademik.isi", { pengajaranId: p.id })))
     throw fail(403, "Anda bukan guru mapel ini");
+  if (p.arsip) throw fail(409, PESAN_ARSIP);
 }
 async function bolehLihat(user: AuthUser, p: { id: string; kelasId: string }) {
   if (!(await can(user, "akademik.lihat", { pengajaranId: p.id, kelasId: p.kelasId })))
@@ -526,6 +528,33 @@ export function akademikRoutes(deps: AppDeps) {
         return c.json(await pengaturanUnit(db, unitId));
       })
       /** Halaman Akademik wali santri: PR aktif, nilai, rapor final anaknya. */
+      /** Dashboard: PR/tugas yang tenggatnya belum lewat — guru (mapelnya) & wali santri (kelas anaknya). */
+      .get("/tugas-aktif", async (c) => {
+        const user = currentUser(c);
+        const today = schoolToday(await schoolTimeZone(db), deps.now?.() ?? new Date());
+        if (!user.relasi.pengajaran.length && !user.relasi.anak.length) return c.json([]);
+        const { rows } = await db.execute(sql`
+          select t.id, t.judul, t.tenggat::text tenggat, m.nama "mapelNama", k.nama "kelasNama"
+          from tugas t join pengajaran p on p.id = t.pengajaran_id
+          join mapel m on m.id = p.mapel_id join kelas k on k.id = p.kelas_id
+          join tahun_ajaran ta on ta.id = k.tahun_ajaran_id and ta.aktif
+          where t.tenggat >= ${today} and (
+            p.id = any(${sql`array[${sql.join(
+              [...user.relasi.pengajaran, "00000000-0000-0000-0000-000000000000"].map(
+                (i) => sql`${i}::uuid`,
+              ),
+              sql`, `,
+            )}]`})
+            or exists (select 1 from pendaftaran pd where pd.kelas_id = k.id and pd.status = 'aktif'
+              and pd.santri_id = any(${sql`array[${sql.join(
+                [...user.relasi.anak, "00000000-0000-0000-0000-000000000000"].map(
+                  (i) => sql`${i}::uuid`,
+                ),
+                sql`, `,
+              )}]`})))
+          order by t.tenggat, t.judul limit 6`);
+        return c.json(rows);
+      })
       .get("/anak/:santriId", async (c) => {
         const santriId = paramId(c, "santriId");
         if (!(await can(currentUser(c), "akademik.lihat", { santriId })))
@@ -826,6 +855,7 @@ export function raporRoutes(deps: AppDeps) {
         const input = await parseBody(c, raporKelasSchema);
         const user = currentUser(c);
         const d = await kelasOfPendaftaran(pendaftaranId);
+        await assertKelasBukanArsip(db, d.kelasId);
         if (!(await can(user, "rapor.isi_kelas", { kelasId: d.kelasId })))
           throw fail(403, "Hanya wali kelas yang mengisi bagian ini");
         const sem = await getSemester(db, input.semesterId, d.tahunAjaranId);
@@ -862,6 +892,7 @@ export function raporRoutes(deps: AppDeps) {
       })
       .post("/kunci", requirePermission("rapor.kunci"), async (c) => {
         const input = await parseBody(c, kunciSchema);
+        await assertKelasBukanArsip(db, input.kelasId);
         const ids =
           input.pendaftaranIds ??
           (await santriKelas(db, input.kelasId)).map((s) => s.pendaftaranId);
@@ -883,6 +914,7 @@ export function raporRoutes(deps: AppDeps) {
       })
       .post("/buka", requirePermission("rapor.kunci"), async (c) => {
         const input = await parseBody(c, kunciSchema);
+        await assertKelasBukanArsip(db, input.kelasId);
         const ids =
           input.pendaftaranIds ??
           (await santriKelas(db, input.kelasId)).map((s) => s.pendaftaranId);

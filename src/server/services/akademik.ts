@@ -48,6 +48,9 @@ export async function getPengajaran(db: DbLike, id: string) {
       kelasNama: kelas.nama,
       unitId: kelas.unitId,
       tahunAjaranId: kelas.tahunAjaranId,
+      // Tahun ajaran arsip (lebih lama dari yang aktif): data baca-saja.
+      arsip: sql<boolean>`exists (select 1 from tahun_ajaran lama join tahun_ajaran a
+        on a.aktif and a.mulai > lama.mulai where lama.id = ${kelas.tahunAjaranId})`,
     })
     .from(pengajaran)
     .innerJoin(mapel, eq(mapel.id, pengajaran.mapelId))

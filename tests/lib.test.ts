@@ -57,6 +57,7 @@ describe("can()", () => {
     id: "u",
     nama: "U",
     wajibGantiPassword: false,
+    perluPersetujuan: false,
     isAdmin: false,
     roles: [],
     permissions: new Set(),

@@ -47,6 +47,16 @@ export function createStorage(root: string) {
       return { stream: createReadStream(full), size };
     },
 
+    async exists(key: string): Promise<boolean> {
+      return stat(pathOf(key)).then(
+        () => true,
+        (err: NodeJS.ErrnoException) => {
+          if (err.code === "ENOENT") return false;
+          throw err;
+        },
+      );
+    },
+
     async delete(key: string): Promise<void> {
       await unlink(pathOf(key)).catch((err: NodeJS.ErrnoException) => {
         if (err.code !== "ENOENT") throw err;

@@ -20,6 +20,7 @@ import { audit } from "../lib/audit";
 import { type AuthUser, can } from "../lib/can";
 import { fail } from "../lib/context";
 import { isoWeekday } from "../lib/tanggal";
+import { assertKelasBukanArsip } from "./sekolah";
 
 const HARI = ["", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Ahad"];
 
@@ -198,6 +199,7 @@ export async function simpanPresensi(
   const { kelasId, tanggal, items } = input;
   if (tanggal > today) throw fail(400, "Presensi tidak bisa diisi untuk tanggal yang akan datang");
   const k = await getKelas(db, kelasId);
+  await assertKelasBukanArsip(db, kelasId);
   if (tanggal < k.taMulai || tanggal > k.taSelesai) {
     throw fail(400, "Tanggal di luar tahun ajaran kelas ini");
   }

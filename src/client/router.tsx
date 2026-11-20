@@ -14,12 +14,14 @@ import { useMe } from "./lib/auth";
 import type { AppPath } from "./lib/nav";
 import { usePublicConfig } from "./lib/sekolah";
 import { AkademikPage, PengaturanAkademikPage, TemplateRaporPage } from "./routes/akademik";
-import { PerangkatPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
+import { PerangkatPage, PersetujuanPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
+import { BackupPage } from "./routes/backup";
 import { BerandaPage } from "./routes/beranda";
 import { CetakKeuanganPage, CetakPresensiPage, CetakRaporPage } from "./routes/cetak";
 import { ImporPage } from "./routes/impor";
 import { InformasiPage, KalenderPage } from "./routes/informasi";
 import { KeuanganPage } from "./routes/keuangan";
+import { LogPage } from "./routes/log";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
 import { AktifkanNotifikasiPage, NotifikasiPage } from "./routes/notifikasi";
 import { PengajaranPage } from "./routes/pengajaran";
@@ -31,6 +33,7 @@ import { RolePage } from "./routes/role";
 import { SantriPage } from "./routes/santri";
 import { KelasPage, MapelPage, SekolahPage, StrukturPage } from "./routes/sekolah";
 import { SistemPage } from "./routes/sistem";
+import { TahunBaruPage } from "./routes/tahun-baru";
 import { WaliPage } from "./routes/wali";
 import { Button } from "./ui/Button";
 
@@ -71,6 +74,7 @@ function AuthGate() {
   }
   if (!me.data) return <Navigate to="/login" />;
   if (me.data.user.wajibGantiPassword) return <WajibGantiPasswordPage />;
+  if (me.data.perluPersetujuan) return <PersetujuanPage />;
   return <AppShell />;
 }
 
@@ -117,10 +121,13 @@ const routeTree = rootRoute.addChildren([
     page("/sekolah/pengajaran", PengajaranPage),
     page("/sekolah/struktur", StrukturPage),
     page("/sekolah/impor", ImporPage),
+    page("/sekolah/tahun-baru", TahunBaruPage),
     page("/sistem", SistemPage),
     page("/sistem/pengguna", PenggunaPage),
     page("/sistem/role", RolePage),
     page("/sistem/pengaturan", PengaturanPage),
+    page("/sistem/backup", BackupPage),
+    page("/sistem/log", LogPage),
     page("/profil", ProfilPage),
     page("/perangkat", PerangkatPage),
   ]),

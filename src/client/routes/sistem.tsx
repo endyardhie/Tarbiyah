@@ -1,7 +1,43 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, DatabaseBackup, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
+import {
+  ChevronRight,
+  DatabaseBackup,
+  History,
+  type LucideIcon,
+  ShieldCheck,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 import { Card, PageHeader } from "../components/Page";
 import { hasPermission, useMe } from "../lib/auth";
+import type { AppPath } from "../lib/nav";
+
+function HubLink({
+  to,
+  icon: Icon,
+  judul,
+  ket,
+}: {
+  to: AppPath;
+  icon: LucideIcon;
+  judul: string;
+  ket: string;
+}) {
+  return (
+    <Link to={to} className="group">
+      <Card className="flex items-center gap-4 transition-colors group-hover:border-primary">
+        <span className="grid size-12 place-items-center rounded-full bg-soft text-on-soft">
+          <Icon size={22} />
+        </span>
+        <div className="flex-1">
+          <p className="font-semibold">{judul}</p>
+          <p className="text-sm text-text2">{ket}</p>
+        </div>
+        <ChevronRight className="text-text2" />
+      </Card>
+    </Link>
+  );
+}
 
 export function SistemPage() {
   const { data: me } = useMe();
@@ -12,56 +48,41 @@ export function SistemPage() {
       <div className="grid gap-3 md:grid-cols-2">
         {kelolaPengguna && (
           <>
-            <Link to="/sistem/pengguna" className="group">
-              <Card className="flex items-center gap-4 transition-colors group-hover:border-primary">
-                <span className="grid size-12 place-items-center rounded-full bg-soft text-on-soft">
-                  <Users size={22} />
-                </span>
-                <div className="flex-1">
-                  <p className="font-semibold">Pengguna</p>
-                  <p className="text-sm text-text2">Buat akun, reset password, nonaktifkan</p>
-                </div>
-                <ChevronRight className="text-text2" />
-              </Card>
-            </Link>
-            <Link to="/sistem/role" className="group">
-              <Card className="flex items-center gap-4 transition-colors group-hover:border-primary">
-                <span className="grid size-12 place-items-center rounded-full bg-soft text-on-soft">
-                  <ShieldCheck size={22} />
-                </span>
-                <div className="flex-1">
-                  <p className="font-semibold">Role & hak akses</p>
-                  <p className="text-sm text-text2">Jabatan dan izinnya</p>
-                </div>
-                <ChevronRight className="text-text2" />
-              </Card>
-            </Link>
+            <HubLink
+              to="/sistem/pengguna"
+              icon={Users}
+              judul="Pengguna"
+              ket="Buat akun, reset password, nonaktifkan"
+            />
+            <HubLink
+              to="/sistem/role"
+              icon={ShieldCheck}
+              judul="Role & hak akses"
+              ket="Jabatan dan izinnya"
+            />
           </>
         )}
         {me?.isAdmin && (
-          <Link to="/sistem/pengaturan" className="group">
-            <Card className="flex items-center gap-4 transition-colors group-hover:border-primary">
-              <span className="grid size-12 place-items-center rounded-full bg-soft text-on-soft">
-                <SlidersHorizontal size={22} />
-              </span>
-              <div className="flex-1">
-                <p className="font-semibold">Pengaturan</p>
-                <p className="text-sm text-text2">Identitas lembaga, zona waktu, logo</p>
-              </div>
-              <ChevronRight className="text-text2" />
-            </Card>
-          </Link>
-        )}
-        {me?.isAdmin && (
-          <Card className="flex items-center gap-4 opacity-70">
-            <span className="grid size-12 place-items-center rounded-full bg-surface-muted text-text2">
-              <DatabaseBackup size={22} />
-            </span>
-            <div className="flex-1">
-              <p className="font-semibold">Backup & restore</p>
-              <p className="text-sm text-text2">Segera hadir · backup ke B2 (M7)</p>
-            </div>
-          </Card>
+          <>
+            <HubLink
+              to="/sistem/pengaturan"
+              icon={SlidersHorizontal}
+              judul="Pengaturan"
+              ket="Identitas, logo, tagihan, WA, pembayaran, persetujuan"
+            />
+            <HubLink
+              to="/sistem/backup"
+              icon={DatabaseBackup}
+              judul="Backup & restore"
+              ket="Backup database & berkas ke B2, pulihkan"
+            />
+            <HubLink
+              to="/sistem/log"
+              icon={History}
+              judul="Log aktivitas"
+              ket="Siapa mengubah apa dan kapan"
+            />
+          </>
         )}
       </div>
     </>

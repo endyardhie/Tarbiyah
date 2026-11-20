@@ -28,7 +28,12 @@ import { can } from "../lib/can";
 import { type AppDeps, type AppEnv, currentUser, fail, paramId, queryId } from "../lib/context";
 import { crudRoutes } from "../lib/crud";
 import { requirePermission, requireUser } from "../lib/guards";
-import { assertActiveUser, resolveTahunAjaran } from "../services/sekolah";
+import {
+  assertActiveUser,
+  assertKelasBukanArsip,
+  assertTaBukanArsip,
+  resolveTahunAjaran,
+} from "../services/sekolah";
 
 /** Lokasi, unit, tahun ajaran, semester, kelas, mapel, pengajaran, jadwal, libur mingguan. */
 export function sekolahRoutes({ db }: AppDeps) {
@@ -128,7 +133,10 @@ export function sekolahRoutes({ db }: AppDeps) {
         schema: kelasSchema,
         permission: "kelas.kelola",
         entitas: "kelas",
-        check: (tx, data) => assertActiveUser(tx, data.waliKelasId, "Wali kelas"),
+        check: async (tx, data) => {
+          await assertTaBukanArsip(tx, data.tahunAjaranId);
+          await assertActiveUser(tx, data.waliKelasId, "Wali kelas");
+        },
         list: async (c) => {
           const ta = await resolveTahunAjaran(db, queryId(c, "tahunAjaranId"));
           if (!ta) return [];
@@ -175,7 +183,10 @@ export function sekolahRoutes({ db }: AppDeps) {
         permission: "jadwal.kelola",
         entitas: "pengajaran",
         canDelete: true,
-        check: (tx, data) => assertActiveUser(tx, data.guruId, "Guru"),
+        check: async (tx, data) => {
+          await assertKelasBukanArsip(tx, data.kelasId);
+          await assertActiveUser(tx, data.guruId, "Guru");
+        },
         list: async (c) => {
           const ta = await resolveTahunAjaran(db, queryId(c, "tahunAjaranId"));
           if (!ta) return [];

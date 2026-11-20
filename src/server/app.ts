@@ -4,13 +4,17 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
+import { secureHeaders } from "hono/secure-headers";
 import { clientIp } from "./lib/client-ip";
 import { type AppDeps, type AppEnv, fail } from "./lib/context";
 import { safeError } from "./lib/log";
+import { pemeliharaan } from "./lib/pemeliharaan";
 import { findSession, loadAuthUser, readSessionToken, setSessionCookie } from "./lib/session";
 import { agendaRoutes } from "./routes/agenda";
 import { akademikRoutes, penilaianRoutes, raporRoutes, tugasRoutes } from "./routes/akademik";
+import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
+import { backupRoutes } from "./routes/backup";
 import { healthRoutes } from "./routes/health";
 import { imporRoutes } from "./routes/impor";
 import { notifikasiRoutes, pengumumanRoutes, pushRoutes } from "./routes/informasi";
@@ -21,10 +25,16 @@ import { presensiRoutes } from "./routes/presensi";
 import { roleRoutes } from "./routes/roles";
 import { santriRoutes, santriWaliRoutes, waliRoutes } from "./routes/santri";
 import { sekolahRoutes } from "./routes/sekolah";
+import { tahunBaruRoutes } from "./routes/tahun-baru";
 import { userRoutes } from "./routes/users";
 import { getIdentitas, isSampleData } from "./services/pengaturan";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const TERBUKA_SAAT_PEMELIHARAAN = new Set([
+  "/api/health",
+  "/api/backup/status",
+  "/api/public-config",
+]);
 
 export function createApp(deps: AppDeps) {
   const { db, config } = deps;
@@ -36,12 +46,24 @@ export function createApp(deps: AppDeps) {
     .use((c, next) => {
       const unggah =
         c.req.path === "/api/pengaturan/logo" || /^\/api\/tugas\/[^/]+\/lampiran$/.test(c.req.path);
+      // Dump backup di-stream ke disk (tidak ke memori), jadi batasnya besar.
+      const dump = c.req.path === "/api/backup/unggah";
       return bodyLimit({
-        maxSize: unggah ? 6 * 1024 * 1024 : 1024 * 1024,
+        maxSize: dump ? 2 * 1024 ** 3 : unggah ? 6 * 1024 * 1024 : 1024 * 1024,
         onError: (c) => c.json({ error: "Data terlalu besar" }, 413),
       })(c, next);
     })
     .use(async (c, next) => {
+      // Mode pemeliharaan (restore): semua permintaan ditolak kecuali status & health.
+      if (pemeliharaan.aktif() && !TERBUKA_SAAT_PEMELIHARAAN.has(c.req.path)) {
+        return c.json(
+          {
+            error: "Aplikasi sedang dipulihkan dari backup. Coba lagi beberapa menit lagi.",
+            pemeliharaan: true,
+          },
+          503,
+        );
+      }
       c.set("ip", clientIp(c, config.trustCloudflare));
       // Cegah CSRF: request yang mengubah data harus datang dari APP_URL.
       // Webhook dari server provider (bukan browser) tidak membawa Origin; diverifikasi tanda tangan.
@@ -51,7 +73,8 @@ export function createApp(deps: AppDeps) {
       }
       c.set("user", null);
       c.set("sessionId", null);
-      const token = readSessionToken(c);
+      // Selama restore tabel sesi sedang diganti: endpoint yang masih terbuka tidak butuh sesi.
+      const token = pemeliharaan.aktif() ? undefined : readSessionToken(c);
       const session = token ? await findSession(db, token) : null;
       if (token && session) {
         c.set("user", await loadAuthUser(db, session.userId));
@@ -94,17 +117,51 @@ export function createApp(deps: AppDeps) {
     .route("/rapor", raporRoutes(deps))
     .route("/keuangan", keuanganRoutes(deps))
     .route("/webhooks", webhookRoutes(deps))
+    .route("/backup", backupRoutes(deps))
+    .route("/tahun-baru", tahunBaruRoutes(deps))
+    .route("/audit", auditRoutes(deps))
     .all("*", (c) => c.json({ error: "Tidak ditemukan" }, 404));
 
-  const app = new Hono().route("/api", api).onError((err, c) => {
-    if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
-    const code = (err as { cause?: { code?: string } }).cause?.code;
-    if (code === "23505") return c.json({ error: "Data yang sama sudah ada" }, 409);
-    if (code === "23503")
-      return c.json({ error: "Data masih dipakai atau rujukan tidak valid" }, 409);
-    console.error(`${c.req.method} ${c.req.path}: ${safeError(err)}`);
-    return c.json({ error: "Terjadi kesalahan di server" }, 500);
-  });
+  const turnstile = "https://challenges.cloudflare.com";
+  const app = new Hono()
+    .use(
+      secureHeaders({
+        contentSecurityPolicy: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", turnstile],
+          frameSrc: [turnstile],
+          connectSrc: ["'self'", turnstile],
+          // Atribut style dari React & CSS cetak di iframe srcdoc.
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          fontSrc: ["'self'", "data:"],
+          workerSrc: ["'self'"],
+          manifestSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+        },
+        strictTransportSecurity: config.appUrl.startsWith("https://")
+          ? "max-age=31536000; includeSubDomains"
+          : false,
+        referrerPolicy: "strict-origin-when-cross-origin",
+        xFrameOptions: "DENY",
+        // Bawaan "require-corp" akan memblokir skrip Turnstile.
+        crossOriginEmbedderPolicy: false,
+        permissionsPolicy: { camera: [], microphone: [], geolocation: [] },
+      }),
+    )
+    .route("/api", api)
+    .onError((err, c) => {
+      if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+      const code = (err as { cause?: { code?: string } }).cause?.code;
+      if (code === "23505") return c.json({ error: "Data yang sama sudah ada" }, 409);
+      if (code === "23503")
+        return c.json({ error: "Data masih dipakai atau rujukan tidak valid" }, 409);
+      console.error(`${c.req.method} ${c.req.path}: ${safeError(err)}`);
+      return c.json({ error: "Terjadi kesalahan di server" }, 500);
+    });
 
   // Manifest PWA dinamis dari pengaturan identitas (nama & ikon yang diunggah admin).
   app.get("/manifest.webmanifest", async (c) => {

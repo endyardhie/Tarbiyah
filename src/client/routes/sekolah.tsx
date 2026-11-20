@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
   CalendarDays,
+  CalendarPlus,
   ChevronRight,
   FileUp,
   GraduationCap,
@@ -84,6 +85,13 @@ const HUB: HubItem[] = [
     title: "Lokasi, unit & tahun ajaran",
     desc: "Struktur lembaga & libur mingguan",
     show: perm("pengaturan.kelola"),
+  },
+  {
+    to: "/sekolah/tahun-baru",
+    icon: CalendarPlus,
+    title: "Tahun ajaran baru",
+    desc: "Naik kelas massal, salin kelas & tarif",
+    show: (me) => !!me?.isAdmin,
   },
   {
     to: "/sekolah/impor",

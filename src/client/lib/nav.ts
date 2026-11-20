@@ -37,6 +37,9 @@ export type AppPath =
   | "/sistem/pengguna"
   | "/sistem/role"
   | "/sistem/pengaturan"
+  | "/sistem/backup"
+  | "/sistem/log"
+  | "/sekolah/tahun-baru"
   | "/profil"
   | "/perangkat";
 

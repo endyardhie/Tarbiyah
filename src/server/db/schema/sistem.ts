@@ -39,3 +39,29 @@ export const berkas = pgTable(
   },
   (t) => [index("berkas_rujukan_idx").on(t.rujukanTipe, t.rujukanId)],
 );
+
+/** Riwayat backup database (lapis 1). Isinya juga ditulis ke manifest JSON di samping dump. */
+export const backupFile = pgTable(
+  "backup_file",
+  {
+    id: id(),
+    nama: text("nama").notNull().unique(), // "tarbiyah-20261120-0200"
+    jenis: text("jenis", {
+      enum: ["otomatis", "manual", "pra_restore", "unggahan", "dari_b2"],
+    }).notNull(),
+    status: text("status", { enum: ["berjalan", "berhasil", "gagal"] })
+      .notNull()
+      .default("berjalan"),
+    ukuran: bigint("ukuran", { mode: "number" }),
+    versiSkema: integer("versi_skema"),
+    versiAplikasi: text("versi_aplikasi"),
+    adaDiServer: boolean("ada_di_server").notNull().default(false),
+    b2Key: text("b2_key"),
+    b2At: tz("b2_at"),
+    error: text("error"),
+    dibuatOleh: uuid("dibuat_oleh").references(() => users.id, { onDelete: "set null" }),
+    dibuatAt: tz("dibuat_at").notNull().defaultNow(),
+    selesaiAt: tz("selesai_at"),
+  },
+  (t) => [index("backup_file_waktu_idx").on(t.dibuatAt)],
+);

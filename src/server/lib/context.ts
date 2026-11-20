@@ -4,6 +4,7 @@ import type pg from "pg";
 import type PgBoss from "pg-boss";
 import { z } from "zod";
 import type { Db } from "../db/client";
+import type { B2, B2Config } from "./b2";
 import type { AuthUser } from "./can";
 import type { Storage } from "./storage";
 import type { VerifyTurnstile } from "./turnstile";
@@ -15,6 +16,8 @@ export type AppConfig = {
   appUrl: string;
   trustCloudflare: boolean;
   turnstileSiteKey: string;
+  /** Untuk pg_dump/pg_restore (backup & restore). */
+  databaseUrl: string;
 };
 
 export type AppDeps = {
@@ -24,6 +27,10 @@ export type AppDeps = {
   config: AppConfig;
   verifyTurnstile: VerifyTurnstile;
   storage: Storage;
+  /** Pembuat klien B2; tes memakai B2 tiruan di memori. */
+  makeB2?: (cfg: B2Config) => B2;
+  /** Dipanggil setelah restore (mis. jadwal cron mengikuti zona waktu dari backup). */
+  setelahRestore?: () => Promise<void>;
   /** Jam sekarang; bisa diganti di tes (mis. tepat tengah malam WIT). */
   now?: () => Date;
   staticDir?: string;

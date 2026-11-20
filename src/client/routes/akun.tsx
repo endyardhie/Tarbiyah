@@ -10,7 +10,7 @@ import { api, errorMessage, queryClient } from "../lib/api";
 import { useLogout, useMe } from "../lib/auth";
 import { formatWaktu } from "../lib/format";
 import { Button } from "../ui/Button";
-import { ErrorAlert, Field, Input, Textarea } from "../ui/Field";
+import { Checkbox, ErrorAlert, Field, Input, Textarea } from "../ui/Field";
 import { AuthLayout, BrandHeader } from "./login";
 
 function ProfileForm({ me }: { me: Me }) {
@@ -191,6 +191,53 @@ export function WajibGantiPasswordPage() {
         <PasswordForm />
         <Button variant="ghost" className="mt-3 w-full" onClick={() => logout.mutate()}>
           Keluar
+        </Button>
+      </div>
+    </AuthLayout>
+  );
+}
+
+/** Persetujuan pemrosesan data: wali santri saat login pertama (teks diatur admin). */
+export function PersetujuanPage() {
+  const logout = useLogout();
+  const [setuju, setSetuju] = useState(false);
+  const teks = useQuery({
+    queryKey: ["persetujuan"],
+    queryFn: () => api<{ teks: string }>("/me/persetujuan"),
+  });
+  const simpan = useMutation({
+    mutationFn: () => api("/me/persetujuan", { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["me"] }),
+  });
+  return (
+    <AuthLayout>
+      <BrandHeader title="Persetujuan data" subtitle="Mohon dibaca sebelum memakai aplikasi." />
+      <div className="space-y-4 rounded-[28px] border border-border bg-surface p-5 shadow-soft sm:p-7">
+        {teks.isPending ? (
+          <div className="h-40 animate-pulse rounded-2xl bg-surface-muted" />
+        ) : teks.isError ? (
+          <ErrorAlert>{errorMessage(teks.error)}</ErrorAlert>
+        ) : (
+          <div className="max-h-[50dvh] overflow-y-auto whitespace-pre-line rounded-2xl bg-surface-muted p-4 text-sm leading-relaxed">
+            {teks.data.teks}
+          </div>
+        )}
+        <Checkbox
+          label="Saya sudah membaca dan menyetujui pemrosesan data di atas"
+          checked={setuju}
+          onChange={(e) => setSetuju(e.target.checked)}
+        />
+        <ErrorAlert>{simpan.isError ? errorMessage(simpan.error) : ""}</ErrorAlert>
+        <Button
+          className="w-full"
+          disabled={!setuju}
+          loading={simpan.isPending}
+          onClick={() => simpan.mutate()}
+        >
+          Setuju & lanjutkan
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={() => logout.mutate()}>
+          Tidak setuju, keluar
         </Button>
       </div>
     </AuthLayout>

@@ -295,6 +295,24 @@ function PembayaranForm({ data }: { data: PengaturanPembayaranView }) {
   );
 }
 
+function PersetujuanForm({ data }: { data: { teks: string } }) {
+  const [teks, setTeks] = useState(data.teks);
+  const f = useSettingForm("persetujuan", (x: { teks: string }) => x);
+  return (
+    <form onSubmit={f.submit({ teks })} className="space-y-4">
+      <Field
+        label="Teks persetujuan pemrosesan data"
+        hint="Ditampilkan kepada wali santri saat pertama kali masuk. Mengubah teks tidak meminta ulang persetujuan yang sudah diberikan."
+      >
+        {(id) => (
+          <Textarea id={id} rows={10} value={teks} onChange={(e) => setTeks(e.target.value)} />
+        )}
+      </Field>
+      <Simpan {...f} label="Simpan teks persetujuan" />
+    </form>
+  );
+}
+
 export function PengaturanKeuanganCards() {
   return (
     <>
@@ -311,6 +329,10 @@ export function PengaturanKeuanganCards() {
         <Loader<PengaturanPembayaranView> path="pembayaran">
           {(d) => <PembayaranForm data={d} />}
         </Loader>
+      </Card>
+      <Card className="lg:col-span-12">
+        <h2 className="mb-4 text-lg font-semibold">Persetujuan data wali santri</h2>
+        <Loader<{ teks: string }> path="persetujuan">{(d) => <PersetujuanForm data={d} />}</Loader>
       </Card>
     </>
   );

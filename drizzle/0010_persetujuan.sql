@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "persetujuan_at" timestamp with time zone;

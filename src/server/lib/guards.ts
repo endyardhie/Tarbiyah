@@ -10,11 +10,22 @@ const ALLOWED_WHILE_MUST_CHANGE = new Set([
   "POST /api/auth/logout",
 ]);
 
+// Wali santri wajib menyetujui pemrosesan data sebelum memakai aplikasi.
+const ALLOWED_BEFORE_CONSENT = new Set([
+  ...ALLOWED_WHILE_MUST_CHANGE,
+  "GET /api/me/persetujuan",
+  "POST /api/me/persetujuan",
+]);
+
 export const requireUser: MiddlewareHandler<AppEnv> = async (c, next) => {
   const user = c.get("user");
   if (!user) throw fail(401, "Silakan masuk terlebih dahulu");
-  if (user.wajibGantiPassword && !ALLOWED_WHILE_MUST_CHANGE.has(`${c.req.method} ${c.req.path}`)) {
+  const rute = `${c.req.method} ${c.req.path}`;
+  if (user.wajibGantiPassword && !ALLOWED_WHILE_MUST_CHANGE.has(rute)) {
     throw fail(403, "Ganti password terlebih dahulu");
+  }
+  if (user.perluPersetujuan && !ALLOWED_BEFORE_CONSENT.has(rute)) {
+    throw fail(403, "Setujui pemrosesan data terlebih dahulu");
   }
   await next();
 };

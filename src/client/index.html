@@ -9,15 +9,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>TARBIYAH</title>
-    <script>
-      // Pasang tema sebelum render agar tidak berkedip tema yang salah.
-      (() => {
-        var t;
-        try { t = localStorage.getItem("tema"); } catch {}
-        if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.dataset.theme = t;
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

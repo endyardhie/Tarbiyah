@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import type PgBoss from "pg-boss";
 import { createApp } from "../../src/server/app";
 import { roles, userPhones, userRoles, users } from "../../src/server/db/schema";
+import type { B2 } from "../../src/server/lib/b2";
 import type { AppConfig } from "../../src/server/lib/context";
 import { hashPassword } from "../../src/server/lib/password";
 import { createStorage } from "../../src/server/lib/storage";
@@ -16,17 +17,21 @@ export const TURNSTILE_OK = "turnstile-ok";
 type ReqOpts = { body?: unknown; cookie?: string; headers?: Record<string, string>; ip?: string };
 
 /** Database tes + app + helper request/login/pengguna. */
-export async function createTestContext(overrides: Partial<AppConfig> & { boss?: PgBoss } = {}) {
+export async function createTestContext(
+  overrides: Partial<AppConfig> & { boss?: PgBoss; b2?: B2 } = {},
+) {
   // Jam yang bisa diatur tes (null = jam sungguhan).
   const clock: { now: Date | null } = { now: null };
   const t = await createTestDb();
+  const { b2: _b2, boss: _boss, ...configOverrides } = overrides;
   const config: AppConfig = {
     version: "test",
     encryptionKey: Buffer.alloc(32, 9).toString("base64"),
     appUrl: ORIGIN,
     trustCloudflare: false,
     turnstileSiteKey: "site",
-    ...overrides,
+    databaseUrl: t.url,
+    ...configOverrides,
   };
   const scheduled: { name: string; tz: string }[] = [];
   const jobs: { name: string; data?: unknown }[] = [];
@@ -40,6 +45,10 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
       insert: async (list: { name: string; data?: unknown }[]) => {
         jobs.push(...list);
       },
+      send: async (name: string, data?: unknown) => {
+        jobs.push({ name, data });
+        return "job";
+      },
     } as unknown as PgBoss);
   const storageDir = mkdtempSync(join(tmpdir(), "tarbiyah-test-"));
   const app = createApp({
@@ -49,6 +58,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     config,
     verifyTurnstile: async (token) => token === TURNSTILE_OK,
     storage: createStorage(storageDir),
+    makeB2: overrides.b2 ? () => overrides.b2 as B2 : undefined,
     now: () => clock.now ?? new Date(),
   });
 
@@ -65,12 +75,17 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     return { status: res.status, headers: res.headers, body: text ? JSON.parse(text) : null };
   }
 
-  async function login(nomor: string, password: string, o: ReqOpts = {}) {
+  /** Login; wali yang belum menyetujui pemrosesan data langsung disetujui (kecuali setujui: false). */
+  async function login(nomor: string, password: string, o: ReqOpts & { setujui?: boolean } = {}) {
     const res = await req("POST", "/api/auth/login", {
       ...o,
       body: { nomor, password, turnstileToken: TURNSTILE_OK },
     });
     const cookie = res.headers.get("set-cookie")?.split(";")[0] ?? "";
+    if (res.body?.perluPersetujuan && o.setujui !== false) {
+      await req("POST", "/api/me/persetujuan", { cookie, ip: o.ip });
+      res.body.perluPersetujuan = false;
+    }
     return { ...res, cookie };
   }
 
@@ -125,6 +140,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     clock,
     jobs,
     storage: createStorage(storageDir),
+    storageDir,
   };
 }
 

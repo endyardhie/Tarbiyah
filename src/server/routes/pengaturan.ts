@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { and, eq, inArray } from "drizzle-orm";
 import { type Context, Hono } from "hono";
+import { z } from "zod";
 import {
   pengaturanKeuanganSchema,
   pengaturanPembayaranSchema,
@@ -16,7 +17,7 @@ import { detectType } from "../lib/file-type";
 import { requirePermission, requireUser } from "../lib/guards";
 import { getPembayaranView, savePembayaran } from "../payment/registry";
 import { getKeuangan } from "../services/keuangan";
-import { getIdentitas, saveIdentitas, writeSetting } from "../services/pengaturan";
+import { getIdentitas, getPersetujuan, saveIdentitas, writeSetting } from "../services/pengaturan";
 import { getWaConfig, getWaView, saveWa } from "../services/wa";
 
 const MB = 1024 * 1024;
@@ -51,6 +52,29 @@ export function pengaturanRoutes({ db, storage, boss, config }: AppDeps) {
         // Jadwal cron (tagihan, backup, dll.) ikut zona waktu baru tanpa restart.
         if (after.zonaWaktu !== before.zonaWaktu) await scheduleJobs(boss, after.zonaWaktu);
         return c.json(after);
+      })
+      .get("/persetujuan", ...admin, async (c) => c.json(await getPersetujuan(db)))
+      .put("/persetujuan", ...admin, async (c) => {
+        const input = await parseBody(
+          c,
+          z.object({
+            teks: z.string().trim().min(20, "Teks persetujuan terlalu pendek").max(5000),
+          }),
+        );
+        const before = await getPersetujuan(db);
+        await db.transaction(async (tx) => {
+          await writeSetting(tx, "persetujuan", input);
+          await audit(tx, {
+            userId: currentUser(c).id,
+            aksi: "pengaturan.persetujuan",
+            entitas: "settings",
+            entitasId: "persetujuan",
+            sebelum: before,
+            sesudah: input,
+            ip: c.get("ip"),
+          });
+        });
+        return c.json(input);
       })
       .get("/keuangan", ...admin, async (c) => c.json(await getKeuangan(db)))
       .put("/keuangan", ...admin, async (c) => {

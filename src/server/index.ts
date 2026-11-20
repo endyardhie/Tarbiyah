@@ -3,9 +3,10 @@ import { createApp } from "./app";
 import { createDb, runMigrations } from "./db/client";
 import { configWarnings, parseEnv } from "./env";
 import { createBoss } from "./jobs/boss";
-import { registerJobs } from "./jobs/schedules";
+import { registerJobs, scheduleJobs } from "./jobs/schedules";
 import { createStorage } from "./lib/storage";
 import { createTurnstileVerifier } from "./lib/turnstile";
+import { sinkronDaftarBackup } from "./services/backup";
 import { schoolTimeZone } from "./services/pengaturan";
 import { ensureDefaultRoles } from "./services/roles";
 
@@ -24,11 +25,18 @@ console.log("Menjalankan migrasi…");
 await runMigrations(db);
 await ensureDefaultRoles(db);
 
+const storage = createStorage(env.DATA_DIR);
+// Backup yang terputus karena restart ditandai gagal; daftar disamakan dengan isi disk.
+await sinkronDaftarBackup({ db, storage });
+
 const boss = createBoss(env.DATABASE_URL);
 await boss.start();
 await registerJobs(boss, db, pool, await schoolTimeZone(db), {
   encryptionKey: env.APP_ENCRYPTION_KEY,
   appUrl: env.APP_URL,
+  storage,
+  databaseUrl: env.DATABASE_URL,
+  version: env.APP_VERSION,
 });
 
 const app = createApp({
@@ -41,9 +49,11 @@ const app = createApp({
     appUrl: env.APP_URL,
     trustCloudflare: env.TRUST_CLOUDFLARE,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY,
+    databaseUrl: env.DATABASE_URL,
   },
   verifyTurnstile: createTurnstileVerifier(env.TURNSTILE_SECRET_KEY),
-  storage: createStorage(env.DATA_DIR),
+  storage,
+  setelahRestore: async () => scheduleJobs(boss, await schoolTimeZone(db)),
   staticDir: "dist/client",
 });
 

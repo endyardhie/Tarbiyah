@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!dist", "!drizzle", "!coverage", "!**/*.css", "!**/*.md"]
+    "includes": ["**", "!dist", "!drizzle", "!coverage", "!graphify-out", "!**/*.css", "!**/*.md"]
   },
   "formatter": {
     "indentStyle": "space",

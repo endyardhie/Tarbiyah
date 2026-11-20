@@ -72,3 +72,17 @@ export async function writeSetting(tx: Db | Tx, key: string, value: object, tere
     .values({ key, ...set })
     .onConflictDoUpdate({ target: settings.key, set });
 }
+
+/** Dipanggil setelah restore: isi tabel settings berganti seluruhnya. */
+export function lupakanCacheIdentitas(db: Db) {
+  cache.delete(db);
+}
+
+export const DEFAULT_PERSETUJUAN = `Dengan memakai aplikasi ini, Anda menyetujui lembaga mengolah data pribadi Anda dan anak Anda (nama, nomor HP, kehadiran, nilai, rapor, dan pembayaran) hanya untuk keperluan pendidikan, komunikasi sekolah, dan administrasi keuangan.
+
+Data hanya dapat dilihat oleh guru, wali kelas, dan petugas yang berwenang, tidak dijual atau dibagikan kepada pihak lain, dan disimpan selama anak Anda terdaftar serta masa arsip yang diwajibkan.
+
+Anda dapat meminta perbaikan data atau penghapusan akun melalui admin sekolah.`;
+
+export const getPersetujuan = (db: Db | Tx) =>
+  readSetting(db, "persetujuan", { teks: DEFAULT_PERSETUJUAN });

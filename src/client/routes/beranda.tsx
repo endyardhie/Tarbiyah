@@ -2,13 +2,15 @@ import { useQuery as useQ, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Activity, CheckCircle2, XCircle } from "lucide-react";
 import { formatRupiah, labelPeriode, METODE_LABEL } from "../../shared/keuangan";
+import type { Agenda } from "../../shared/types";
 import { Card, PageHeader } from "../components/Page";
 import { api } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
-import { formatTanggal } from "../lib/format";
+import { formatTanggal, formatWaktu, hariIniSekolah } from "../lib/format";
 import { isPureWali } from "../lib/nav";
 import { useHariIni } from "../lib/presensi";
 import { usePublicConfig } from "../lib/sekolah";
+import { useRingkasanBackup } from "./backup";
 import { useTagihanAnak } from "./keuangan-wali";
 
 type Health = { ok: boolean; versi: string; waktuSekolah: string; db: boolean; boss: boolean };
@@ -185,7 +187,9 @@ function KartuTagihanAnak() {
               <span>
                 {t.anak} · {labelPeriode(t.periode)}
               </span>
-              <span className="tabular-nums">{formatRupiah(t.total)}</span>
+              <span className="shrink-0 whitespace-nowrap tabular-nums">
+                {formatRupiah(t.total)}
+              </span>
             </li>
           ))}
           {belum.length > 4 && <li className="text-text2">+{belum.length - 4} lainnya</li>}
@@ -261,11 +265,191 @@ function RingkasanKeuangan() {
               <span>
                 {p.santriNama} · {labelPeriode(p.periode)} · {METODE_LABEL[p.metode]}
               </span>
-              <span className="tabular-nums">{formatRupiah(p.jumlah)}</span>
+              <span className="shrink-0 whitespace-nowrap tabular-nums">
+                {formatRupiah(p.jumlah)}
+              </span>
             </li>
           ))}
         </ul>
       )}
+    </Card>
+  );
+}
+
+const tgl = (t: string) => formatTanggal(new Date(`${t}T00:00:00Z`), "UTC").replace(/^\w+, /, "");
+const tambahHari = (t: string, n: number) =>
+  new Date(Date.parse(`${t}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+function KartuDaftar({
+  judul,
+  ke,
+  kosong,
+  items,
+}: {
+  judul: string;
+  ke: "/akademik" | "/informasi" | "/informasi/kalender" | "/informasi/pengumuman";
+  kosong: string;
+  items: { id: string; utama: string; ket: string }[] | undefined;
+}) {
+  if (!items) return null;
+  return (
+    <Card className="lg:col-span-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="font-semibold">{judul}</h2>
+        <Link
+          to={ke}
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
+        >
+          Semua
+        </Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-text2">{kosong}</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((i) => (
+            <li key={i.id}>
+              <p className="font-medium">{i.utama}</p>
+              <p className="text-sm text-text2">{i.ket}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/** Guru: PR/tugas mapelnya; wali santri: PR kelas anaknya (tenggat terdekat). */
+function KartuTugasAktif() {
+  const q = useQuery({
+    queryKey: ["akademik", "tugas-aktif"],
+    queryFn: () =>
+      api<{ id: string; judul: string; tenggat: string; mapelNama: string; kelasNama: string }[]>(
+        "/akademik/tugas-aktif",
+      ),
+  });
+  return (
+    <KartuDaftar
+      judul="PR & tugas aktif"
+      ke="/akademik"
+      kosong="Tidak ada tugas yang tenggatnya belum lewat."
+      items={q.data?.map((t) => ({
+        id: t.id,
+        utama: t.judul,
+        ket: `${t.mapelNama} · ${t.kelasNama} · tenggat ${tgl(t.tenggat)}`,
+      }))}
+    />
+  );
+}
+
+function KartuAgenda() {
+  const today = hariIniSekolah();
+  const q = useQuery({
+    queryKey: ["agenda", "beranda", today],
+    queryFn: () => api<Agenda[]>(`/agenda?dari=${today}&sampai=${tambahHari(today, 60)}`),
+  });
+  return (
+    <KartuDaftar
+      judul="Agenda terdekat"
+      ke="/informasi/kalender"
+      kosong="Belum ada agenda 60 hari ke depan."
+      items={q.data?.slice(0, 3).map((a) => ({
+        id: a.id,
+        utama: a.judul,
+        ket: a.mulai === a.selesai ? tgl(a.mulai) : `${tgl(a.mulai)} – ${tgl(a.selesai)}`,
+      }))}
+    />
+  );
+}
+
+function KartuPengumuman() {
+  const q = useQuery({
+    queryKey: ["pengumuman"],
+    queryFn: () =>
+      api<{ id: string; judul: string; dikirimAt: string; pengirimNama: string }[]>("/pengumuman"),
+  });
+  return (
+    <KartuDaftar
+      judul="Pengumuman terbaru"
+      ke="/informasi/pengumuman"
+      kosong="Belum ada pengumuman."
+      items={q.data?.slice(0, 3).map((p) => ({
+        id: p.id,
+        utama: p.judul,
+        ket: `${p.pengirimNama} · ${formatWaktu(p.dikirimAt)}`,
+      }))}
+    />
+  );
+}
+
+/** Kepsek/admin: kehadiran bulan ini per unit. */
+function KartuRekapUnit() {
+  const q = useQuery({
+    queryKey: ["presensi", "rekap-unit"],
+    queryFn: () =>
+      api<{ id: string; kode: string; nama: string; H: number; S: number; I: number; A: number }[]>(
+        "/presensi/rekap-unit",
+      ),
+  });
+  if (!q.data) return null;
+  return (
+    <Card className="lg:col-span-6">
+      <h2 className="mb-2 font-semibold">Kehadiran bulan ini per unit</h2>
+      {q.data.length === 0 ? (
+        <p className="text-sm text-text2">Belum ada presensi bulan ini.</p>
+      ) : (
+        <ul className="space-y-2">
+          {q.data.map((u) => {
+            const total = u.H + u.S + u.I + u.A;
+            const persen = total ? Math.round((u.H / total) * 1000) / 10 : null;
+            return (
+              <li key={u.id} className="flex items-center justify-between gap-3">
+                <span>
+                  <span className="font-medium">{u.kode}</span>
+                  <span className="block text-sm text-text2">
+                    S {u.S} · I {u.I} · A {u.A}
+                  </span>
+                </span>
+                <span className="text-xl font-bold tabular-nums">
+                  {persen == null ? "—" : `${persen.toLocaleString("id-ID")}%`}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/** Admin: backup terakhir yang berhasil & berkas yang belum tersalin ke B2. */
+function KartuBackup() {
+  const q = useRingkasanBackup();
+  const d = q.data;
+  if (!d) return null;
+  const lama =
+    !d.terakhir || Date.now() - Date.parse(d.terakhir.dibuatAt) > (d.intervalHari + 1) * 86_400_000;
+  return (
+    <Card className="lg:col-span-6">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="font-semibold">Backup</h2>
+        <Link
+          to="/sistem/backup"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
+        >
+          Buka
+        </Link>
+      </div>
+      <p className={`font-semibold ${lama ? "text-warn" : "text-primary"}`}>
+        {d.terakhir
+          ? `Terakhir berhasil ${formatWaktu(d.terakhir.dibuatAt)}`
+          : "Belum pernah backup"}
+      </p>
+      <p className="text-sm text-text2">
+        {d.b2Aktif
+          ? `${d.berkasBelumTersalin} berkas belum tersalin ke B2`
+          : "B2 belum aktif: backup hanya ada di server"}
+      </p>
     </Card>
   );
 }
@@ -302,6 +486,13 @@ export function BerandaPage() {
         {(hasPermission(me, "keuangan.lihat") || hasPermission(me, "keuangan.kelola")) && (
           <RingkasanKeuangan />
         )}
+        {me && (me.relasi.pengajaran.length > 0 || me.relasi.anak.length > 0) && (
+          <KartuTugasAktif />
+        )}
+        {me && <KartuAgenda />}
+        {me && <KartuPengumuman />}
+        {hasPermission(me, "presensi.lihat_semua") && <KartuRekapUnit />}
+        {me?.isAdmin && <KartuBackup />}
         {me?.isAdmin && <SystemStatus />}
       </div>
     </>

@@ -23,6 +23,8 @@ export const users = pgTable("users", {
     .notNull()
     .default("aktif"),
   wajibGantiPassword: boolean("wajib_ganti_password").notNull().default(false),
+  // Persetujuan pemrosesan data pribadi (wali santri, saat login pertama; UU PDP).
+  persetujuanAt: tz("persetujuan_at"),
   loginTerakhir: tz("login_terakhir"),
   dibuatAt: tz("dibuat_at").notNull().defaultNow(),
   diubahAt: tz("diubah_at").notNull().defaultNow(),

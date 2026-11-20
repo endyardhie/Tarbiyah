@@ -19,6 +19,8 @@ export type AuthUser = {
   id: string;
   nama: string;
   wajibGantiPassword: boolean;
+  /** Wali santri yang belum menyetujui pemrosesan data. */
+  perluPersetujuan: boolean;
   isAdmin: boolean;
   roles: { id: string; nama: string; admin: boolean }[];
   permissions: Set<string>;

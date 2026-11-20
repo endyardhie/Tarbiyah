@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { simpanPresensiSchema } from "../../shared/presensi";
@@ -105,6 +105,27 @@ export function presensiRoutes(deps: AppDeps) {
           bisaKoreksi: await can(user, "presensi.koreksi"),
           ...data,
         });
+      })
+      /** Dashboard kepsek/admin: rekap kehadiran bulan ini per unit (tahun ajaran aktif). */
+      .get("/rekap-unit", async (c) => {
+        if (!(await can(currentUser(c), "presensi.lihat_semua"))) {
+          throw fail(403, "Anda tidak punya akses");
+        }
+        const { dari, sampai } = monthBounds(await today());
+        const { rows } = await db.execute(sql`
+          select u.id, u.kode, u.nama,
+            count(*) filter (where pr.status = 'H')::int "H",
+            count(*) filter (where pr.status = 'S')::int "S",
+            count(*) filter (where pr.status = 'I')::int "I",
+            count(*) filter (where pr.status = 'A')::int "A"
+          from presensi pr
+          join pendaftaran pd on pd.id = pr.pendaftaran_id
+          join kelas k on k.id = pd.kelas_id
+          join tahun_ajaran ta on ta.id = k.tahun_ajaran_id and ta.aktif
+          join units u on u.id = k.unit_id
+          where pr.tanggal between ${dari} and ${sampai}
+          group by u.id order by u.urutan, u.kode`);
+        return c.json(rows);
       })
       .put("/", async (c) => {
         const input = await parseBody(c, simpanPresensiSchema);

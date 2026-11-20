@@ -1,7 +1,11 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type PgBoss from "pg-boss";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createBoss } from "../src/server/jobs/boss";
 import { registerJobs } from "../src/server/jobs/schedules";
+import { createStorage } from "../src/server/lib/storage";
 import { schoolNow } from "../src/server/lib/tanggal";
 import { createTestContext, type TestContext } from "./helpers/app";
 import { createTestDb } from "./helpers/db";
@@ -17,6 +21,9 @@ beforeAll(async () => {
   await registerJobs(boss, t.db, t.pool, "Asia/Jayapura", {
     encryptionKey: Buffer.alloc(32, 1).toString("base64"),
     appUrl: "https://x",
+    storage: createStorage(mkdtempSync(join(tmpdir(), "tarbiyah-health-"))),
+    databaseUrl: t.url,
+    version: "test",
   });
   ctx = await createTestContext({ boss, version: "abc123" });
 });

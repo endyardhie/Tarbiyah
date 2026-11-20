@@ -80,13 +80,13 @@ export const DEFAULT_KEUANGAN: PengaturanKeuangan = {
   templateBukti: DEFAULT_TEMPLATE_BUKTI,
 };
 
-const secretInput = z
+export const secretInput = z
   .string()
   .max(500)
   .optional()
   .transform((v) => v || undefined); // kosong = tidak diubah
 
-const internalUrl = z
+export const internalUrl = z
   .string()
   .trim()
   .max(300)

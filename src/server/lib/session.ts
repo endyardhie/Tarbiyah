@@ -80,7 +80,12 @@ export async function findSession(db: Db, token: string) {
 
 export async function loadAuthUser(db: Db, userId: string): Promise<AuthUser | null> {
   const [user] = await db
-    .select({ id: users.id, nama: users.nama, wajibGantiPassword: users.wajibGantiPassword })
+    .select({
+      id: users.id,
+      nama: users.nama,
+      wajibGantiPassword: users.wajibGantiPassword,
+      persetujuanAt: users.persetujuanAt,
+    })
     .from(users)
     .where(eq(users.id, userId));
   if (!user) return null;
@@ -107,8 +112,10 @@ export async function loadAuthUser(db: Db, userId: string): Promise<AuthUser | n
       .where(and(eq(pengajaran.guruId, userId), eq(tahunAjaran.aktif, true))),
     db.select({ id: santriWali.santriId }).from(santriWali).where(eq(santriWali.userId, userId)),
   ]);
+  const { persetujuanAt, ...rest } = user;
   return {
-    ...user,
+    ...rest,
+    perluPersetujuan: !persetujuanAt && anak.length > 0,
     isAdmin: rows.some((r) => r.admin),
     roles: [...roleMap.values()],
     permissions: new Set(rows.flatMap((r) => (r.izin ? [r.izin] : []))),

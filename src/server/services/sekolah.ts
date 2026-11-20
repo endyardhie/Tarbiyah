@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db, Tx } from "../db/client";
 import { tahunAjaran, users } from "../db/schema";
 import { fail } from "../lib/context";
@@ -21,4 +21,21 @@ export async function assertActiveUser(tx: Tx, id: string | null, label: string)
     .from(users)
     .where(and(eq(users.id, id), eq(users.status, "aktif")));
   if (!u) throw fail(400, `${label} harus pengguna aktif`);
+}
+
+export const PESAN_ARSIP = "Tahun ajaran ini sudah diarsipkan dan hanya bisa dibaca.";
+
+/** Tahun ajaran arsip = lebih lama dari tahun ajaran aktif; datanya baca-saja. */
+export async function assertTaBukanArsip(db: Db | Tx, tahunAjaranId: string) {
+  const { rows } = await db.execute(sql`
+    select 1 from tahun_ajaran lama join tahun_ajaran a on a.aktif and a.mulai > lama.mulai
+    where lama.id = ${tahunAjaranId}`);
+  if (rows.length) throw fail(409, PESAN_ARSIP);
+}
+
+export async function assertKelasBukanArsip(db: Db | Tx, kelasId: string) {
+  const { rows } = await db.execute(sql`
+    select 1 from kelas k join tahun_ajaran lama on lama.id = k.tahun_ajaran_id
+    join tahun_ajaran a on a.aktif and a.mulai > lama.mulai where k.id = ${kelasId}`);
+  if (rows.length) throw fail(409, PESAN_ARSIP);
 }

@@ -2,9 +2,13 @@ import { sql } from "drizzle-orm";
 import type pg from "pg";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client";
+import type { B2, B2Config } from "../lib/b2";
+import { safeError } from "../lib/log";
+import { pemeliharaan } from "../lib/pemeliharaan";
+import type { Storage } from "../lib/storage";
+import { backupTerjadwal, eksklusif, jalankanBackup, sinkronBerkas } from "../services/backup";
 import { tagihanHarian } from "../services/keuangan";
 import { rekonsiliasi } from "../services/pembayaran-online";
-import { schoolTimeZone } from "../services/pengaturan";
 import { sendPush } from "../services/push";
 import { processWaJob } from "../services/wa";
 import { QUEUES } from "./queues";
@@ -15,55 +19,111 @@ export async function scheduleJobs(boss: PgBoss, timeZone: string) {
   await boss.schedule(QUEUES.cleanup, "30 2 * * *", {}, { tz: timeZone });
   await boss.schedule(QUEUES.tagihanBuat, "0 3 * * *", {}, { tz: timeZone });
   await boss.schedule(QUEUES.rekonsiliasi, "*/15 * * * *", {}, { tz: timeZone });
+  await boss.schedule(QUEUES.backupCek, "0 2 * * *", {}, { tz: timeZone });
+  await boss.schedule(QUEUES.filesSync, "15 * * * *", {}, { tz: timeZone });
 }
+
+export type JobConfig = {
+  encryptionKey: string;
+  appUrl: string;
+  storage: Storage;
+  databaseUrl: string;
+  version: string;
+  makeB2?: (cfg: B2Config) => B2;
+};
 
 export async function registerJobs(
   boss: PgBoss,
   db: Db,
   pool: pg.Pool,
   timeZone: string,
-  cfg: { encryptionKey: string; appUrl: string },
+  cfg: JobConfig,
 ) {
+  const backupDeps = { db, pool, boss, ...cfg };
   await boss.createQueue(QUEUES.heartbeat);
   await boss.createQueue(QUEUES.cleanup);
   await boss.createQueue(QUEUES.pushSend);
   await boss.createQueue(QUEUES.waSend);
   await boss.createQueue(QUEUES.tagihanBuat);
   await boss.createQueue(QUEUES.rekonsiliasi);
+  await boss.createQueue(QUEUES.backupCek);
+  await boss.createQueue(QUEUES.backupRun);
+  await boss.createQueue(QUEUES.filesSync);
   await scheduleJobs(boss, timeZone);
 
+  // Selama restore (mode pemeliharaan) job ditunda, bukan digagalkan.
+  const siap =
+    <A extends unknown[]>(fn: (...a: A) => Promise<unknown>) =>
+    async (...a: A) => {
+      await pemeliharaan.tunggu();
+      await fn(...a);
+    };
+
   // Interval polling diperbesar: bawaan pg-boss 2 detik per worker = query terus-menerus saat menganggur.
-  await boss.work(QUEUES.heartbeat, { pollingIntervalSeconds: 60 }, async () => {
-    console.log(`[heartbeat] ${new Date().toISOString()}`);
-  });
+  await boss.work(
+    QUEUES.heartbeat,
+    { pollingIntervalSeconds: 60 },
+    siap(async () => console.log(`[heartbeat] ${new Date().toISOString()}`)),
+  );
   // Bersih-bersih sesi, batas percobaan, dan OTP yang sudah kedaluwarsa.
-  await boss.work(QUEUES.cleanup, { pollingIntervalSeconds: 60 }, async () => {
-    await db.execute(sql`delete from sessions where kedaluwarsa < now()`);
-    await db.execute(sql`delete from rate_limits where reset_at < now()`);
-    await db.execute(sql`delete from otp_codes where kedaluwarsa < now() - interval '1 day'`);
-    // Cadangan bila worker WA tidak sempat memproses: pesan OTP lama tetap disamarkan.
-    await db.execute(sql`update wa_outbox set pesan = regexp_replace(pesan, '[0-9]{6}', '******', 'g')
-      where rujukan_tipe = 'otp' and dibuat_at < now() - interval '1 hour' and pesan ~ '[0-9]{6}'`);
-  });
+  await boss.work(
+    QUEUES.cleanup,
+    { pollingIntervalSeconds: 60 },
+    siap(async () => {
+      await db.execute(sql`delete from sessions where kedaluwarsa < now()`);
+      await db.execute(sql`delete from rate_limits where reset_at < now()`);
+      await db.execute(sql`delete from otp_codes where kedaluwarsa < now() - interval '1 day'`);
+      // Cadangan bila worker WA tidak sempat memproses: pesan OTP lama tetap disamarkan.
+      await db.execute(sql`update wa_outbox set pesan = regexp_replace(pesan, '[0-9]{6}', '******', 'g')
+        where rujukan_tipe = 'otp' and dibuat_at < now() - interval '1 hour' and pesan ~ '[0-9]{6}'`);
+    }),
+  );
 
   // Tagihan SPP bulan berjalan dibuat tanggal 1 (idempoten; terlewat → tombol "Buat tagihan").
-  await boss.work(QUEUES.tagihanBuat, { pollingIntervalSeconds: 60 }, async () => {
-    const hasil = await tagihanHarian(db);
-    if (hasil) console.log(`[tagihan] ${hasil.periode}: ${hasil.dibuat} tagihan dibuat`);
-  });
+  await boss.work(
+    QUEUES.tagihanBuat,
+    { pollingIntervalSeconds: 60 },
+    siap(async () => {
+      const hasil = await tagihanHarian(db);
+      if (hasil) console.log(`[tagihan] ${hasil.periode}: ${hasil.dibuat} tagihan dibuat`);
+    }),
+  );
 
   // Cadangan webhook pembayaran yang hilang.
-  await boss.work(QUEUES.rekonsiliasi, { pollingIntervalSeconds: 60 }, async () => {
-    await rekonsiliasi({ db, pool, boss, config: cfg });
-  });
+  await boss.work(
+    QUEUES.rekonsiliasi,
+    { pollingIntervalSeconds: 60 },
+    siap(() => rekonsiliasi({ db, pool, boss, config: cfg })),
+  );
+
+  // Backup: cek jadwal harian, backup manual dari halaman Backup, dan salin berkas tiap jam.
+  await boss.work(
+    QUEUES.backupCek,
+    { pollingIntervalSeconds: 60 },
+    siap(() => backupTerjadwal(backupDeps).catch((e) => console.error(`[backup] ${safeError(e)}`))),
+  );
+  await boss.work<{ userId: string | null }>(
+    QUEUES.backupRun,
+    { batchSize: 1, pollingIntervalSeconds: 5 },
+    siap(async ([job]) => {
+      await eksklusif(() =>
+        jalankanBackup(backupDeps, { jenis: "manual", userId: job?.data.userId ?? null }),
+      ).catch((e) => console.error(`[backup] ${safeError(e)}`));
+    }),
+  );
+  await boss.work(
+    QUEUES.filesSync,
+    { pollingIntervalSeconds: 60 },
+    siap(() => sinkronBerkas(backupDeps)),
+  );
 
   // WA: satu worker (konkurensi 1), jeda antar-pesan diatur di processWaJob.
   await boss.work<{ outboxId: string }>(
     QUEUES.waSend,
     { batchSize: 1, pollingIntervalSeconds: 5 },
-    async ([job]) => {
+    siap(async ([job]) => {
       if (job) await processWaJob({ db, encryptionKey: cfg.encryptionKey }, job.data.outboxId);
-    },
+    }),
   );
 
   // Web Push: 5 worker (konkurensi 5) agar hemat memori; retry bertahap diatur per job.
@@ -71,9 +131,9 @@ export async function registerJobs(
     await boss.work<{ subscriptionId: string; notifikasiId: string }>(
       QUEUES.pushSend,
       { batchSize: 1, pollingIntervalSeconds: 10 },
-      async ([job]) => {
+      siap(async ([job]) => {
         if (job) await sendPush(db, cfg, job.data);
-      },
+      }),
     );
   }
 }

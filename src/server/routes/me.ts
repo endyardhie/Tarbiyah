@@ -2,10 +2,12 @@ import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { changePasswordSchema, profileSchema } from "../../shared/schemas";
 import type { Db } from "../db/client";
-import { sessions } from "../db/schema";
+import { sessions, users } from "../db/schema";
+import { audit } from "../lib/audit";
 import type { AuthUser } from "../lib/can";
 import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { requireUser } from "../lib/guards";
+import { getPersetujuan } from "../services/pengaturan";
 import { changePassword, getUsers, updateProfile } from "../services/users";
 
 export async function meResponse(db: Db, auth: AuthUser) {
@@ -16,6 +18,7 @@ export async function meResponse(db: Db, auth: AuthUser) {
     isAdmin: auth.isAdmin,
     permissions: [...auth.permissions].sort(),
     relasi: auth.relasi,
+    perluPersetujuan: auth.perluPersetujuan,
   };
 }
 
@@ -28,6 +31,22 @@ export function meRoutes({ db }: AppDeps) {
       const user = currentUser(c);
       await updateProfile(db, user.id, input, c.get("ip"));
       return c.json(await meResponse(db, user));
+    })
+    .get("/persetujuan", async (c) => c.json({ teks: (await getPersetujuan(db)).teks }))
+    .post("/persetujuan", async (c) => {
+      const user = currentUser(c);
+      await db.transaction(async (tx) => {
+        await tx.update(users).set({ persetujuanAt: new Date() }).where(eq(users.id, user.id));
+        await audit(tx, {
+          userId: user.id,
+          aksi: "persetujuan.data",
+          entitas: "users",
+          entitasId: user.id,
+          sesudah: { teks: (await getPersetujuan(db)).teks },
+          ip: c.get("ip"),
+        });
+      });
+      return c.json({ ok: true });
     })
     .post("/password", async (c) => {
       const { passwordLama, passwordBaru } = await parseBody(c, changePasswordSchema);

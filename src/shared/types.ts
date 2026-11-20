@@ -25,6 +25,7 @@ export type Me = {
   isAdmin: boolean;
   permissions: string[];
   relasi: { kelasWali: string[]; pengajaran: string[]; kelasAjar: string[]; anak: string[] };
+  perluPersetujuan: boolean;
 };
 
 export type Role = RoleRef & {

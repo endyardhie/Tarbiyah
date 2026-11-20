@@ -146,3 +146,8 @@ export async function sendPush(
     throw new Error(`Push gagal (status ${status ?? "?"})`);
   }
 }
+
+/** Dipanggil setelah restore: kunci VAPID ikut berganti dari backup. */
+export function lupakanCacheVapid(db: Db) {
+  vapidCache.delete(db);
+}
