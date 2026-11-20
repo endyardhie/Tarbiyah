@@ -8,6 +8,7 @@ import { api, errorMessage } from "../lib/api";
 import { useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 import { STATUS, tglDate } from "../lib/presensi";
+import { PRINT_FONTS } from "../lib/print-fonts";
 import { usePublicConfig } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 
@@ -129,7 +130,7 @@ export function CetakRaporPage() {
       const pages = q.data.data
         .map((d) => `<section class="halaman">${renderTemplate(q.data.template.html, d)}</section>`)
         .join("");
-      doc = `<!doctype html><html lang="id"><head><meta charset="utf-8"><base href="${window.location.origin}/"><style>${q.data.template.css}
+      doc = `<!doctype html><html lang="id"><head><meta charset="utf-8"><base href="${window.location.origin}/"><style>${PRINT_FONTS}${q.data.template.css}
 .halaman { break-after: page; } .halaman:last-child { break-after: auto; }</style></head><body>${pages}</body></html>`;
     } catch (e) {
       error = (e as Error).message;

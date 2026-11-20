@@ -112,7 +112,19 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     rmSync(storageDir, { recursive: true, force: true });
   }
 
-  return { ...t, drop, app, req, login, makeUser, roleId, scheduled, clock, jobs };
+  return {
+    ...t,
+    drop,
+    app,
+    req,
+    login,
+    makeUser,
+    roleId,
+    scheduled,
+    clock,
+    jobs,
+    storage: createStorage(storageDir),
+  };
 }
 
 export type TestContext = Awaited<ReturnType<typeof createTestContext>>;

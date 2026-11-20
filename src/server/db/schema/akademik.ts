@@ -159,7 +159,10 @@ export const raporNilai = pgTable(
     nilaiAkhir: numeric("nilai_akhir", { precision: 5, scale: 2, mode: "number" }),
     predikat: text("predikat"),
     deskripsi: text("deskripsi"),
+    /** nilai_akhir diisi guru (bukan otomatis). Selama draft, baris non-manual dihitung ulang. */
     manual: boolean("manual").notNull().default(false),
+    /** deskripsi ditulis guru; selain itu deskripsi otomatis dari predikat. */
+    deskripsiManual: boolean("deskripsi_manual").notNull().default(false),
   },
   (t) => [unique("rapor_nilai_rapor_pengajaran").on(t.raporId, t.pengajaranId)],
 );

@@ -59,6 +59,7 @@ import {
   getSemester,
   kunciRapor,
   nilaiOtomatis,
+  nilaiRaporEfektif,
   pengaturanUnit,
   raporContexts,
   rekapAbsen,
@@ -108,6 +109,7 @@ export function tugasRoutes(deps: AppDeps) {
             namaAsli: berkas.namaAsli,
             tipe: berkas.tipe,
             ukuran: berkas.ukuran,
+            path: berkas.path,
           })
           .from(berkas)
           .where(and(eq(berkas.rujukanTipe, "tugas"), inArray(berkas.rujukanId, ids)))
@@ -132,7 +134,11 @@ export function tugasRoutes(deps: AppDeps) {
         .orderBy(desc(tugas.tanggalDiberi), desc(tugas.dibuatAt));
       const lamp = await lampiranOf(rows.map((r) => r.id));
       return c.json(
-        rows.map((r) => ({ ...r, lampiran: lamp.filter((l) => l.rujukanId === r.id) })),
+        rows.map((r) => ({
+          ...r,
+          // path di disk tidak dikirim ke browser
+          lampiran: lamp.filter((l) => l.rujukanId === r.id).map(({ path: _, ...l }) => l),
+        })),
       );
     })
     .post("/", async (c) => {
@@ -175,6 +181,8 @@ export function tugasRoutes(deps: AppDeps) {
           ip: c.get("ip"),
         });
       });
+      // Berkas di disk ikut dihapus (salinan di B2, bila sudah dibackup, tetap ada).
+      await Promise.all(lamp.map((l) => storage.delete(l.path)));
       return c.json({ ok: true });
     })
     .post("/:id/lampiran", async (c) => {
@@ -667,18 +675,23 @@ export function raporRoutes(deps: AppDeps) {
           skala: set.skala,
           santri: siswa.map((s) => {
             const r = saved.find((x) => x.pendaftaranId === s.pendaftaranId);
-            const otomatis = oto.get(s.pendaftaranId) ?? null;
-            const akhir = r?.rn?.manual ? r.rn.nilaiAkhir : otomatis;
-            const pred = predikatDari(akhir, set.skala, p.mapelNama);
+            const final = r?.status === "final";
+            const e = nilaiRaporEfektif(
+              r?.rn ?? undefined,
+              final,
+              oto.get(s.pendaftaranId) ?? null,
+              set.skala,
+              p.mapelNama,
+            );
             return {
               ...s,
-              nilaiOtomatis: otomatis,
-              nilaiAkhir: akhir,
-              manual: !!r?.rn?.manual,
-              predikat: pred?.predikat ?? null,
-              deskripsi: r?.rn?.deskripsi ?? pred?.deskripsi ?? "",
-              deskripsiManual: !!r?.rn?.deskripsi && r.rn.deskripsi !== pred?.deskripsi,
-              final: r?.status === "final",
+              nilaiOtomatis: e.otomatis,
+              nilaiAkhir: e.nilai,
+              manual: e.manual,
+              predikat: e.predikat,
+              deskripsi: e.deskripsi,
+              deskripsiManual: e.deskripsiManual,
+              final,
             };
           }),
         });
@@ -707,17 +720,19 @@ export function raporRoutes(deps: AppDeps) {
             const otomatis = oto.get(i.pendaftaranId) ?? null;
             const manual = i.nilaiAkhir != null && i.nilaiAkhir !== otomatis;
             const akhir = manual ? i.nilaiAkhir : otomatis;
-            const pred = predikatDari(akhir, set.skala, p.mapelNama);
             const [before] = await tx
               .select()
               .from(raporNilai)
               .where(and(eq(raporNilai.raporId, r.id), eq(raporNilai.pengajaranId, p.id)));
+            // Hanya yang ditulis guru yang disimpan; nilai & deskripsi otomatis dihitung ulang
+            // saat dibaca dan saat rapor dikunci (nilai yang masuk belakangan selalu ikut).
             const values = {
               nilaiOtomatis: otomatis,
-              nilaiAkhir: akhir,
+              nilaiAkhir: manual ? akhir : null,
               manual,
-              predikat: pred?.predikat ?? null,
-              deskripsi: i.deskripsi ?? pred?.deskripsi ?? null,
+              predikat: null,
+              deskripsi: i.deskripsi,
+              deskripsiManual: !!i.deskripsi,
             };
             await tx
               .insert(raporNilai)

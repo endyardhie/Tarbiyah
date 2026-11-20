@@ -168,6 +168,40 @@ export async function nilaiOtomatis(
   return new Map([...per].map(([id, m]) => [id, nilaiBerbobot(m, bobot)]));
 }
 
+/**
+ * Nilai rapor satu mapel untuk satu santri. Rapor final → nilai yang dibekukan saat dikunci.
+ * Draft → nilai akhir guru bila diubah manual, selain itu dihitung ulang dari nilai terkini
+ * (agar nilai yang masuk belakangan selalu ikut); deskripsi otomatis kecuali ditulis guru.
+ */
+export function nilaiRaporEfektif(
+  row: typeof raporNilai.$inferSelect | undefined,
+  final: boolean,
+  otomatis: number | null,
+  skala: Skala[],
+  mapelNama: string,
+) {
+  if (final && row) {
+    return {
+      otomatis: row.nilaiOtomatis,
+      nilai: row.nilaiAkhir,
+      predikat: row.predikat,
+      deskripsi: row.deskripsi ?? "",
+      manual: row.manual,
+      deskripsiManual: row.deskripsiManual,
+    };
+  }
+  const nilaiAkhir = row?.manual ? row.nilaiAkhir : otomatis;
+  const pred = predikatDari(nilaiAkhir, skala, mapelNama);
+  return {
+    otomatis,
+    nilai: nilaiAkhir,
+    predikat: pred?.predikat ?? null,
+    deskripsi: row?.deskripsiManual ? (row.deskripsi ?? "") : (pred?.deskripsi ?? ""),
+    manual: !!row?.manual,
+    deskripsiManual: !!row?.deskripsiManual,
+  };
+}
+
 /** Rekap S/I/A dari presensi dalam rentang semester. */
 export async function rekapAbsen(
   db: DbLike,
@@ -226,24 +260,28 @@ export async function kunciRapor(
   );
   for (const pid of pendaftaranIds) {
     const r = await ensureRapor(tx, pid, sem.id);
+    const saved = await tx.select().from(raporNilai).where(eq(raporNilai.raporId, r.id));
     for (const p of ajar) {
-      const v = otomatis.get(p.id)?.get(pid) ?? null;
-      const pred = predikatDari(v, set.skala, p.mapelNama);
+      // Bekukan dengan nilai terkini (bukan nilai saat guru terakhir menyimpan).
+      const e = nilaiRaporEfektif(
+        saved.find((x) => x.pengajaranId === p.id),
+        false,
+        otomatis.get(p.id)?.get(pid) ?? null,
+        set.skala,
+        p.mapelNama,
+      );
+      const values = {
+        nilaiOtomatis: e.otomatis,
+        nilaiAkhir: e.nilai,
+        predikat: e.predikat,
+        deskripsi: e.deskripsi || null,
+        manual: e.manual,
+        deskripsiManual: e.deskripsiManual,
+      };
       await tx
         .insert(raporNilai)
-        .values({
-          raporId: r.id,
-          pengajaranId: p.id,
-          nilaiOtomatis: v,
-          nilaiAkhir: v,
-          predikat: pred?.predikat ?? null,
-          deskripsi: pred?.deskripsi ?? null,
-        })
-        .onConflictDoUpdate({
-          target: [raporNilai.raporId, raporNilai.pengajaranId],
-          // Nilai yang sudah disimpan guru (manual/deskripsi) dipertahankan; hanya otomatis diperbarui.
-          set: { nilaiOtomatis: v },
-        });
+        .values({ raporId: r.id, pengajaranId: p.id, ...values })
+        .onConflictDoUpdate({ target: [raporNilai.raporId, raporNilai.pengajaranId], set: values });
     }
     const a = absen.get(pid) ?? { sakit: 0, izin: 0, alpa: 0 };
     await tx
@@ -302,12 +340,18 @@ export async function raporContexts(
         tempatLahir: santri.tempatLahir,
         tanggalLahir: santri.tanggalLahir,
         noAbsen: pendaftaran.noAbsen,
+        aktif: sql<boolean>`${pendaftaran.status} = 'aktif' and ${santri.status} = 'aktif'`,
+        final: sql<boolean>`exists (select 1 from rapor r where r.pendaftaran_id = ${pendaftaran.id}
+          and r.semester_id = ${sem.id} and r.status = 'final')`,
       })
       .from(pendaftaran)
       .innerJoin(santri, eq(santri.id, pendaftaran.santriId))
       .where(eq(pendaftaran.kelasId, kelasId))
       .orderBy(sql`${pendaftaran.noAbsen} nulls last`, asc(santri.nama))
-  ).filter((s) => !pendaftaranIds || pendaftaranIds.includes(s.pendaftaranId));
+  ).filter((s) =>
+    // Cetak satu kelas: santri aktif + yang rapornya sudah final (bukan yang sudah pindah/keluar).
+    pendaftaranIds ? pendaftaranIds.includes(s.pendaftaranId) : s.aktif || s.final,
+  );
   const ids = siswa.map((s) => s.pendaftaranId);
   const ajar = await db
     .select({ id: pengajaran.id, kkm: pengajaran.kkm, nama: mapel.nama, namaArab: mapel.namaArab })
@@ -349,19 +393,21 @@ export async function raporContexts(
       const r = raporRows.find((x) => x.pendaftaranId === s.pendaftaranId);
       const final = r?.status === "final";
       const mapelList = ajar.map((p, i) => {
-        const saved = r ? rn.find((x) => x.raporId === r.id && x.pengajaranId === p.id) : undefined;
-        const v = saved ? saved.nilaiAkhir : (otomatis.get(p.id)?.get(s.pendaftaranId) ?? null);
-        const pred = saved?.predikat
-          ? { predikat: saved.predikat, deskripsi: saved.deskripsi ?? "" }
-          : predikatDari(v, set.skala, p.nama);
+        const e = nilaiRaporEfektif(
+          r ? rn.find((x) => x.raporId === r.id && x.pengajaranId === p.id) : undefined,
+          final,
+          otomatis.get(p.id)?.get(s.pendaftaranId) ?? null,
+          set.skala,
+          p.nama,
+        );
         return {
           no: i + 1,
           nama: p.nama,
           namaArab: p.namaArab ?? "",
           kkm: p.kkm == null ? "" : String(p.kkm),
-          nilai: v == null ? "" : String(Math.round(v)),
-          predikat: pred?.predikat ?? "",
-          deskripsi: saved?.deskripsi ?? pred?.deskripsi ?? "",
+          nilai: e.nilai == null ? "" : String(Math.round(e.nilai)),
+          predikat: e.predikat ?? "",
+          deskripsi: e.deskripsi,
         };
       });
       const absen =

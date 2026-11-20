@@ -384,9 +384,13 @@ describe("pengaturan & template", () => {
     const r = await t.req("GET", `/api/rapor/mapel?pengajaranId=${id.pA}&semesterId=${id.sem1}`, {
       cookie: c.guruB,
     });
+    // d2 sudah final → nilai dibekukan (tidak ikut bobot baru); d1 draft → dihitung ulang dengan bobot baru.
     expect(
       r.body.santri.find((s: { pendaftaranId: string }) => s.pendaftaranId === id.d2),
-    ).toMatchObject({ nilaiOtomatis: 60, predikat: "B" });
+    ).toMatchObject({ nilaiOtomatis: 66, final: true });
+    expect(
+      r.body.santri.find((s: { pendaftaranId: string }) => s.pendaftaranId === id.d1),
+    ).toMatchObject({ nilaiOtomatis: 80, nilaiAkhir: 88, manual: true, predikat: "A" });
     expect(
       (
         await t.req("PUT", `/api/rapor/template/${id.unit}`, {
@@ -416,5 +420,151 @@ describe("pengaturan & template", () => {
     });
     expect(cetak.body.template.html).toBe("<p>{{santri.nama}}</p>");
     expect(cetak.body.data).toHaveLength(2);
+  });
+});
+
+describe("review M5", () => {
+  it("nilai yang masuk setelah guru menyimpan rapor mapel ikut terhitung saat dikunci (regresi)", async () => {
+    await post("/api/rapor/buka", {
+      kelasId: id.kelas,
+      semesterId: id.sem1,
+      pendaftaranIds: [id.d2],
+    });
+    // Bobot kini UH 100%; skala A ≥85, B ≥0. Nilai UH d2 sejauh ini: 60.
+    await t.req("PUT", "/api/rapor/mapel", {
+      cookie: c.guruB,
+      body: {
+        pengajaranId: id.pA,
+        semesterId: id.sem1,
+        items: [{ pendaftaranId: id.d2, nilaiAkhir: null, deskripsi: null }],
+      },
+    });
+    const uh2 = await post(
+      "/api/penilaian",
+      { pengajaranId: id.pA, jenis: "UH", judul: "UH 2", tanggal: "2026-11-25" },
+      c.guruB,
+    );
+    await t.req("PUT", `/api/penilaian/${uh2.id}/nilai`, {
+      cookie: c.guruB,
+      body: { items: [{ pendaftaranId: id.d2, nilai: 100 }] },
+    });
+    const draft = await t.req(
+      "GET",
+      `/api/rapor/cetak?pendaftaranId=${id.d2}&semesterId=${id.sem1}`,
+      { cookie: admin },
+    );
+    expect(
+      draft.body.data[0].mapel.find((m: { nama: string }) => m.nama === "Fiqih"),
+    ).toMatchObject({ nilai: "80", predikat: "B" });
+    await post("/api/rapor/kunci", {
+      kelasId: id.kelas,
+      semesterId: id.sem1,
+      pendaftaranIds: [id.d2],
+    });
+    const final = await t.req(
+      "GET",
+      `/api/rapor/cetak?pendaftaranId=${id.d2}&semesterId=${id.sem1}`,
+      { cookie: admin },
+    );
+    expect(
+      final.body.data[0].mapel.find((m: { nama: string }) => m.nama === "Fiqih"),
+    ).toMatchObject({ nilai: "80", predikat: "B" });
+  });
+
+  it("guru mapel lain di kelas yang sama tidak melihat nilai & lampiran mapel ini", async () => {
+    const tarikh = (await post("/api/mapel", { nama: "Tarikh" })).id;
+    await post("/api/pengajaran", { kelasId: id.kelas, mapelId: tarikh, guruId: uid.guruC });
+    expect(
+      (await t.req("GET", `/api/penilaian?pengajaranId=${id.pA}`, { cookie: c.guruC })).status,
+    ).toBe(403);
+    expect(
+      (
+        await t.req("GET", `/api/rapor/mapel?pengajaranId=${id.pA}&semesterId=${id.sem1}`, {
+          cookie: c.guruC,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await t.req("GET", `/api/tugas?pengajaranId=${id.pA}`, { cookie: c.guruC })).status,
+    ).toBe(403);
+    expect(
+      (await t.req("GET", `/api/penilaian?pengajaranId=${id.pA}`, { cookie: c.guruA })).status,
+    ).toBe(200); // wali kelas
+  });
+
+  it("aspek unit lain & semester tahun ajaran lain ditolak", async () => {
+    const unit2 = (await post("/api/units", { kode: "MDTW", nama: "MDT Wustha" })).id;
+    const set = await t.req("PUT", `/api/akademik/pengaturan/${unit2}`, {
+      cookie: admin,
+      body: {
+        bobot: { PR: 0, tugas: 0, UH: 100, UTS: 0, UAS: 0, praktik: 0 },
+        skala: [{ predikat: "A", min: 0 }],
+        aspek: [{ kelompok: "X", nama: "Y", tipe: "teks" }],
+      },
+    });
+    await post("/api/rapor/buka", {
+      kelasId: id.kelas,
+      semesterId: id.sem1,
+      pendaftaranIds: [id.d1],
+    });
+    const res = await t.req("PUT", `/api/rapor/kelas/${id.d1}`, {
+      cookie: c.guruA,
+      body: {
+        semesterId: id.sem1,
+        aspek: [{ aspekId: set.body.aspek[0].id, nilai: "x" }],
+        catatanWali: null,
+        keputusan: null,
+      },
+    });
+    expect(res.status).toBe(400);
+    const ta2 = (
+      await post("/api/tahun-ajaran", {
+        nama: "2027/2028",
+        mulai: "2027-07-12",
+        selesai: "2028-06-30",
+      })
+    ).id;
+    const sem = (
+      await post("/api/semester", {
+        tahunAjaranId: ta2,
+        nomor: 1,
+        mulai: "2027-07-12",
+        selesai: "2027-12-18",
+      })
+    ).id;
+    expect(
+      (
+        await t.req("GET", `/api/penilaian?pengajaranId=${id.pA}&semesterId=${sem}`, {
+          cookie: c.guruB,
+        })
+      ).status,
+    ).toBe(400);
+  });
+
+  it("hapus tugas ikut menghapus berkas lampiran di disk", async () => {
+    const tg = await post(
+      "/api/tugas",
+      { pengajaranId: id.pA, judul: "Sementara", tanggalDiberi: "2026-11-20" },
+      c.guruB,
+    );
+    expect((await upload(tg.id, new Blob(["%PDF-1.4 x"]), "a.pdf", c.guruB)).status).toBe(201);
+    const before = (await t.storage.list("files")).length;
+    expect((await t.req("DELETE", `/api/tugas/${tg.id}`, { cookie: c.guruB })).status).toBe(200);
+    expect((await t.storage.list("files")).length).toBe(before - 1);
+  });
+
+  it("cetak satu kelas tidak memuat santri yang sudah keluar (tanpa rapor final)", async () => {
+    const s3 = (await post("/api/santri", { nis: "S3", nama: "Santri Keluar", kelasId: id.kelas }))
+      .id;
+    await t.req("PATCH", `/api/santri/${s3}`, {
+      cookie: admin,
+      body: { nis: "S3", nama: "Santri Keluar", kelasId: id.kelas, status: "keluar" },
+    });
+    const res = await t.req("GET", `/api/rapor/cetak?kelasId=${id.kelas}&semesterId=${id.sem1}`, {
+      cookie: admin,
+    });
+    const names = res.body.data.map((d: { santri: { nama: string } }) => d.santri.nama);
+    expect(names).not.toContain("Santri Keluar");
+    expect(names).toEqual(expect.arrayContaining(["Santri <Satu>", "Santri Dua"]));
   });
 });

@@ -15,7 +15,11 @@ export default defineConfig({
       // Manifest dibuat server dari pengaturan (nama & ikon lembaga), bukan saat build.
       manifest: false,
       injectRegister: false,
-      injectManifest: { globPatterns: ["**/*.{js,css,html,woff2,png}"] },
+      // Font Arab hanya untuk halaman cetak: tidak perlu diunduh semua pengguna saat install.
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,woff2,png}"],
+        globIgnores: ["**/amiri-*"],
+      },
     }),
   ],
   build: { outDir: "../../dist/client", emptyOutDir: true },

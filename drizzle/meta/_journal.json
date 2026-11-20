@@ -43,6 +43,13 @@
       "when": 1795124032077,
       "tag": "0005_akademik",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795125567498,
+      "tag": "0006_rapor_deskripsi_manual",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 import { isPureWali } from "../lib/nav";
 import { tglDate } from "../lib/presensi";
+import { PRINT_FONTS } from "../lib/print-fonts";
 import { kelasLabel, useKelas, useUnits } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, inputBase, inputClass } from "../ui/Field";
@@ -258,7 +259,11 @@ function AkademikAnak() {
                     {list.map((n) => (
                       <li key={`${n.judul}-${n.tanggal}`} className="flex justify-between gap-3">
                         <span className="text-text2">
-                          {n.judul} · {JENIS_LABEL[n.jenis]}
+                          {n.judul}
+                          {/* "UAS · UAS" cukup "UAS" */}
+                          {![n.jenis, JENIS_LABEL[n.jenis]].some((j) =>
+                            n.judul.toLowerCase().startsWith(j.toLowerCase()),
+                          ) && ` · ${JENIS_LABEL[n.jenis]}`}
                         </span>
                         <span className="font-semibold tabular-nums">
                           {n.nilai.toLocaleString("id-ID")}
@@ -524,7 +529,7 @@ function TemplateEditor({
   const err = checkTemplate(html);
   const preview = err
     ? ""
-    : `<!doctype html><html><head><meta charset="utf-8"><base href="${window.location.origin}/"><style>${css}</style></head><body>${renderTemplate(html, { ...SAMPLE_CONTEXT, draft: false })}</body></html>`;
+    : `<!doctype html><html><head><meta charset="utf-8"><base href="${window.location.origin}/"><style>${PRINT_FONTS}${css}</style></head><body>${renderTemplate(html, { ...SAMPLE_CONTEXT, draft: false })}</body></html>`;
   const save = useMutation({
     mutationFn: () =>
       api(`/rapor/template/${unitId}`, { method: "PUT", body: { nama, html, css } }),

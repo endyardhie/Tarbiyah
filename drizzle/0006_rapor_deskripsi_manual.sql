@@ -1,0 +1,1 @@
+ALTER TABLE "rapor_nilai" ADD COLUMN "deskripsi_manual" boolean DEFAULT false NOT NULL;

@@ -40,7 +40,7 @@ export const RELATION_PERMISSIONS = {
   "presensi.lihat": ["presensi.lihat_semua", "presensi.koreksi"],
   /** Isi tugas & nilai: guru pengajar mapel itu (pengajaranId). */
   "akademik.isi": [],
-  /** Lihat tugas & nilai: guru (pengajarannya), wali kelas & pengajar (kelasnya), wali santri (anaknya). */
+  /** Lihat tugas & nilai: guru (mapel yang diajarnya), wali kelas (kelasnya), wali santri (anaknya). */
   "akademik.lihat": ["akademik.lihat_semua"],
   /** Isi aspek, catatan, keputusan rapor: wali kelas (kelasnya). */
   "rapor.isi_kelas": [],
