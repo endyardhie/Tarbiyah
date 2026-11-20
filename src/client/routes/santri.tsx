@@ -6,11 +6,11 @@ import { STATUS_SANTRI } from "../../shared/sekolah";
 import type { SantriDetail, SantriRow } from "../../shared/types";
 import { EntityForm } from "../components/EntityForm";
 import { ListSkeleton } from "../components/MasterList";
-import { EmptyState, PageHeader } from "../components/Page";
+import { EmptyState, ListRow, PageHeader, SaringHp } from "../components/Page";
 import { api, errorMessage } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
 import { formatPhone, formatTanggal } from "../lib/format";
-import { kelasLabel, useKelas } from "../lib/sekolah";
+import { kelasLabel, useKelas, useTahunAjaran } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, inputClass } from "../ui/Field";
 import { Modal } from "../ui/Modal";
@@ -103,7 +103,7 @@ function SantriModal({
     queryKey: ["santri", "detail", id],
     queryFn: () => api<SantriDetail>(`/santri/${id}`),
   });
-  const waliList = useWaliList(view === "hubungkan");
+  const waliList = useWaliList(view === "hubungkan", true);
   const unlink = useMutation({
     mutationFn: (userId: string) => unlinkSantriWali(id, userId),
     onSuccess: () => detail.refetch(),
@@ -257,6 +257,7 @@ export function SantriPage() {
   const [open, setOpen] = useState<SantriRow | "baru" | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const kelas = useKelas(taId);
+  const tahunAjaran = useTahunAjaran();
   // Saringan kelas hanya berisi kelas yang boleh dilihat (server tetap memeriksa).
   const lihatSemua =
     !!me?.isAdmin || RELATION_PERMISSIONS["santri.lihat"].some((p) => me?.permissions.includes(p));
@@ -277,6 +278,46 @@ export function SantriPage() {
   );
   const kembar = shown.filter((s) => s.panggilanKembar);
 
+  const filterSantri = (
+    <>
+      <TahunAjaranSelect
+        value={taId}
+        onChange={(v) => {
+          setTaId(v);
+          setKelasId("");
+        }}
+      />
+      <select
+        aria-label="Kelas"
+        className={`${inputClass} sm:w-64`}
+        value={kelasId}
+        onChange={(e) => setKelasId(e.target.value)}
+      >
+        <option value="">Semua kelas</option>
+        {kelasOptions.map((k) => (
+          <option key={k.id} value={k.id}>
+            {kelasLabel(k)}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+  const cariSantri = (
+    <div className="relative">
+      <Search
+        size={18}
+        className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-text2"
+      />
+      <input
+        aria-label="Cari santri"
+        placeholder="Cari nama atau NIS"
+        className={`${inputClass} pl-11`}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+    </div>
+  );
+
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-4">
@@ -290,39 +331,27 @@ export function SantriPage() {
           </Button>
         )}
       </div>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-        <TahunAjaranSelect
-          value={taId}
-          onChange={(v) => {
-            setTaId(v);
+      <div className="mb-4">
+        <SaringHp
+          cari={cariSantri}
+          filter={filterSantri}
+          aktif={(taId ? 1 : 0) + (kelasId ? 1 : 0)}
+          ringkas={[
+            (taId ? tahunAjaran.data?.find((t) => t.id === taId)?.nama : null) ??
+              "Tahun ajaran aktif",
+            kelasId && kelasOptions.find((k) => k.id === kelasId)?.nama,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          hasil={list.data ? shown.length : undefined}
+          onReset={() => {
+            setTaId("");
             setKelasId("");
           }}
         />
-        <select
-          aria-label="Kelas"
-          className={`${inputClass} sm:w-64`}
-          value={kelasId}
-          onChange={(e) => setKelasId(e.target.value)}
-        >
-          <option value="">Semua kelas</option>
-          {kelasOptions.map((k) => (
-            <option key={k.id} value={k.id}>
-              {kelasLabel(k)}
-            </option>
-          ))}
-        </select>
-        <div className="relative flex-1">
-          <Search
-            size={18}
-            className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-text2"
-          />
-          <input
-            aria-label="Cari santri"
-            placeholder="Cari nama atau NIS"
-            className={`${inputClass} pl-11`}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+        <div className="hidden gap-3 sm:flex">
+          {filterSantri}
+          <div className="flex-1">{cariSantri}</div>
         </div>
       </div>
       {(warning || kembar.length > 0) && (
@@ -348,31 +377,23 @@ export function SantriPage() {
       ) : (
         <>
           <p className="mb-2 text-sm text-text2">{shown.length} santri</p>
-          <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {shown.map((s) => (
               <li key={s.id}>
-                <button
-                  type="button"
+                <ListRow
+                  nama={s.nama}
+                  ket={`${s.namaPanggilan ? `${s.namaPanggilan} · ` : ""}${s.nis} · ${
+                    s.kelasNama ? `${s.kelasNama} ${s.unitKode} ${s.lokasiNama}` : "Belum ada kelas"
+                  }`}
+                  badge={
+                    s.status !== "aktif" ? (
+                      <Badge>{statusLabel[s.status]}</Badge>
+                    ) : (
+                      s.panggilanKembar && <Badge tone="warn">kembar</Badge>
+                    )
+                  }
                   onClick={() => setOpen(s)}
-                  className="flex h-full w-full items-start gap-3 rounded-2xl border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{s.nama}</p>
-                    <p className="text-sm text-text2">
-                      {s.nis} ·{" "}
-                      {s.kelasNama
-                        ? `${s.kelasNama} · ${s.unitKode} ${s.lokasiNama}`
-                        : "Belum ada kelas"}
-                    </p>
-                    {s.namaPanggilan && (
-                      <p className="mt-1 text-sm">
-                        Panggilan: {s.namaPanggilan}{" "}
-                        {s.panggilanKembar && <Badge tone="warn">kembar</Badge>}
-                      </p>
-                    )}
-                  </div>
-                  {s.status !== "aktif" && <Badge>{statusLabel[s.status]}</Badge>}
-                </button>
+                />
               </li>
             ))}
           </ul>

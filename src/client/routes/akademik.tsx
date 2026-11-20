@@ -23,12 +23,13 @@ import { LampiranLink, TugasTab } from "./akademik-tugas";
 import { RaporKelasTab, RaporMapelTab } from "./rapor";
 import { Badge } from "./sekolah";
 
-type Tab = "tugas" | "nilai" | "rapor-mapel" | "rapor-kelas";
+type Tab = "tugas" | "nilai" | "rapor-mapel" | "rapor-kelas" | "anak";
 const TAB_LABEL: Record<Tab, string> = {
   tugas: "Tugas/PR",
   nilai: "Nilai",
   "rapor-mapel": "Rapor mapel",
   "rapor-kelas": "Rapor kelas",
+  anak: "Anak saya",
 };
 
 function AkademikStaf() {
@@ -42,6 +43,8 @@ function AkademikStaf() {
   const tabs: Tab[] = [
     ...((ajar.data?.length ?? 0) > 0 ? (["tugas", "nilai", "rapor-mapel"] as Tab[]) : []),
     ...(kelasRapor.length ? (["rapor-kelas"] as Tab[]) : []),
+    // Guru/wali kelas yang juga wali santri.
+    ...(me?.relasi.anak.length ? (["anak"] as Tab[]) : []),
   ];
   const [tab, setTab] = useState<Tab | null>(null);
   const [ajarId, setAjarId] = useState("");
@@ -76,7 +79,9 @@ function AkademikStaf() {
       ) : (
         <>
           <TabBar tabs={tabs} value={active} onChange={setTab} label={(t) => TAB_LABEL[t]} />
-          {active === "rapor-kelas" ? (
+          {active === "anak" ? (
+            <AkademikAnak />
+          ) : active === "rapor-kelas" ? (
             <>
               {kelasRapor.length > 1 && (
                 <select
@@ -139,9 +144,12 @@ type AnakData = {
 };
 
 function AkademikAnak() {
-  const anak = useQuery({ queryKey: ["santri", ""], queryFn: () => api<SantriRow[]>("/santri") });
+  const { data: me } = useMe();
+  const semua = useQuery({ queryKey: ["santri", ""], queryFn: () => api<SantriRow[]>("/santri") });
+  // Untuk guru/wali kelas, /santri juga berisi santri yang diajar; ambil anak sendiri saja.
+  const daftar = semua.data?.filter((x) => me?.relasi.anak.includes(x.id)) ?? [];
   const [pilih, setPilih] = useState("");
-  const santriId = pilih || anak.data?.[0]?.id || "";
+  const santriId = pilih || daftar[0]?.id || "";
   const q = useQuery({
     queryKey: ["akademik", "anak", santriId],
     queryFn: () => api<AnakData>(`/akademik/anak/${santriId}`),
@@ -152,8 +160,8 @@ function AkademikAnak() {
     for (const n of q.data?.nilai ?? []) m.set(n.mapelNama, [...(m.get(n.mapelNama) ?? []), n]);
     return [...m];
   }, [q.data]);
-  if (anak.isPending) return <ListSkeleton />;
-  if (!anak.data?.length)
+  if (semua.isPending) return <ListSkeleton />;
+  if (!daftar.length)
     return (
       <EmptyState icon={BookOpen} title="Belum terhubung ke santri">
         Hubungi admin sekolah.
@@ -161,14 +169,14 @@ function AkademikAnak() {
     );
   return (
     <div className="space-y-4">
-      {anak.data.length > 1 && (
+      {daftar.length > 1 && (
         <TabBar
-          tabs={anak.data.map((a) => a.id)}
+          tabs={daftar.map((a) => a.id)}
           value={santriId}
           onChange={setPilih}
           label={(id) =>
-            anak.data.find((a) => a.id === id)?.namaPanggilan ||
-            anak.data.find((a) => a.id === id)?.nama ||
+            daftar.find((a) => a.id === id)?.namaPanggilan ||
+            daftar.find((a) => a.id === id)?.nama ||
             ""
           }
         />

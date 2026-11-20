@@ -171,6 +171,14 @@ describe("validasi & izin", () => {
     const [u] = await t.db.select().from(users).where(eq(users.id, id.guru));
     expect(u?.nama).toBe("Wali Kelas");
   });
+
+  it("akun guru tidak tampil di daftar wali, tapi bisa dipilih saat menghubungkan (?semua=1)", async () => {
+    const ids = async (path: string) =>
+      ((await t.req("GET", path, { cookie: admin })).body as { id: string }[]).map((w) => w.id);
+    expect(await ids("/api/wali")).not.toContain(id.guru);
+    expect(await ids("/api/wali?semua=1")).toContain(id.guru);
+    expect((await t.req("GET", "/api/wali?semua=1", { cookie: guru })).status).toBe(403);
+  });
 });
 
 describe("berkas & logo", () => {

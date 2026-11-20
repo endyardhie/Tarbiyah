@@ -192,12 +192,18 @@ export async function assertPureWali(db: Db | Tx, userId: string) {
 }
 
 /** Semua wali (terhubung ke santri, atau akun tanpa jabatan) beserta anaknya. */
-export async function listWali(db: Db) {
+/**
+ * Daftar wali santri. `semua`: juga akun guru/staf aktif, untuk memilih wali saat
+ * menghubungkan santri (guru yang sekaligus orang tua santri).
+ */
+export async function listWali(db: Db, opts: { semua?: boolean } = {}) {
   const list = await db
     .select({ id: users.id, nama: users.nama, status: users.status })
     .from(users)
     .where(
-      sql`exists (select 1 from santri_wali sw where sw.user_id = "users"."id")
+      opts.semua
+        ? sql`"users"."status" = 'aktif' or exists (select 1 from santri_wali sw where sw.user_id = "users"."id")`
+        : sql`exists (select 1 from santri_wali sw where sw.user_id = "users"."id")
         or not (exists (select 1 from user_roles ur where ur.user_id = "users"."id")
           or exists (select 1 from kelas k where k.wali_kelas_id = "users"."id")
           or exists (select 1 from pengajaran p where p.guru_id = "users"."id"))`,

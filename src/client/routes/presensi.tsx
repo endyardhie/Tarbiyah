@@ -515,8 +515,13 @@ export function PresensiPage() {
   const anakList = useQuery({
     queryKey: ["santri", ""],
     queryFn: () => api<SantriRow[]>("/santri"),
-    enabled: wali,
+    enabled: wali || !!me?.relasi.anak.length,
   });
+  // Guru/wali kelas yang juga wali santri mendapat tab "Anak saya".
+  const punyaAnak = !wali && !!me?.relasi.anak.length;
+  const anakOpsi = (anakList.data ?? [])
+    .filter((s) => me?.relasi.anak.includes(s.id))
+    .map((s) => ({ id: s.id, label: s.nama }));
   const isiList = (hari.data?.kelas ?? [])
     .filter((k) => k.bisaIsi)
     .map((k) => ({ id: k.id, label: `${k.nama} · ${k.unitKode} ${k.lokasiNama}` }));
@@ -525,8 +530,15 @@ export function PresensiPage() {
     label: `${k.nama} · ${k.unitKode} ${k.lokasiNama}`,
   }));
   const bisaKoreksi = !!me?.isAdmin || !!me?.permissions.includes("presensi.koreksi");
-  const [tab, setTab] = useState<"isi" | "laporan" | null>(null);
-  const active = tab ?? (isiList.length ? "isi" : "laporan");
+  type TabPresensi = "isi" | "laporan" | "anak";
+  const tabs: TabPresensi[] = [
+    ...(isiList.length ? (["isi"] as const) : []),
+    "laporan",
+    ...(punyaAnak ? (["anak"] as const) : []),
+  ];
+  const [tab, setTab] = useState<TabPresensi | null>(null);
+  const active: TabPresensi = tab ?? tabs[0] ?? "laporan";
+  const lihatAnak = wali || active === "anak";
 
   if (hari.isPending) return <ListSkeleton rows={6} />;
   return (
@@ -537,24 +549,25 @@ export function PresensiPage() {
           wali ? "Kehadiran anak Anda." : "Sekali sehari per santri; bisa diubah sampai 23.59."
         }
       />
-      {isiList.length > 0 && (
+      {tabs.length > 1 && (
         <TabBar
-          tabs={["isi", "laporan"] as const}
+          tabs={tabs}
           value={active}
           onChange={setTab}
-          label={(t) => (t === "isi" ? "Isi presensi" : "Laporan")}
+          label={(t) => ({ isi: "Isi presensi", laporan: "Laporan", anak: "Anak saya" })[t]}
         />
       )}
       <ErrorAlert>{hari.isError ? errorMessage(hari.error) : ""}</ErrorAlert>
-      {active === "isi" && isiList.length > 0 ? (
+      {active === "isi" ? (
         <IsiPresensi kelasList={isiList} bisaKoreksi={bisaKoreksi} />
-      ) : wali && anakList.isPending ? (
+      ) : lihatAnak && anakList.isPending ? (
         <ListSkeleton />
       ) : (
         <Card>
           <LaporanPresensi
-            kelasList={lihatList}
-            anak={wali ? (anakList.data ?? []).map((s) => ({ id: s.id, label: s.nama })) : []}
+            key={active}
+            kelasList={lihatAnak ? [] : lihatList}
+            anak={lihatAnak ? anakOpsi : []}
             today={hari.data?.tanggal ?? new Date().toISOString().slice(0, 10)}
           />
         </Card>

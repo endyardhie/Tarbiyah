@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { formatRupiah, labelPeriode } from "../../shared/keuangan";
 import type { Agenda } from "../../shared/types";
+import { inisial } from "../components/Page";
 import { api } from "../lib/api";
 import { formatTanggal, formatWaktu, hariIniSekolah } from "../lib/format";
 import type { AppPath } from "../lib/nav";
@@ -33,12 +34,6 @@ type Kehadiran = {
 
 const tglPendek = (t: string) =>
   formatTanggal(new Date(`${t}T00:00:00Z`), "UTC").replace(/^\w+, /, "");
-const inisial = (n: string) =>
-  n
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
 
 const AKSI: { to: AppPath; label: string; icon: LucideIcon; cls: string }[] = [
   { to: "/presensi", label: "Presensi", icon: ClipboardCheck, cls: "bg-soft text-on-soft" },

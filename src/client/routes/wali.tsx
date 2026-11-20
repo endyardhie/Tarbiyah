@@ -4,7 +4,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { HUBUNGAN } from "../../shared/sekolah";
 import type { SantriRow, WaliRow } from "../../shared/types";
 import { ListSkeleton } from "../components/MasterList";
-import { EmptyState, PageHeader } from "../components/Page";
+import { EmptyState, ListRow, PageHeader } from "../components/Page";
 import { emptyPhone, PhonesEditor, phonesPayload, toDraft } from "../components/PhonesEditor";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
@@ -23,8 +23,13 @@ const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["santri"] }),
   ]);
 
-export const useWaliList = (enabled = true) =>
-  useQuery({ queryKey: ["wali"], queryFn: () => api<WaliRow[]>("/wali"), enabled });
+/** `semua`: juga akun guru/staf aktif (untuk menghubungkan wali ke santri). */
+export const useWaliList = (enabled = true, semua = false) =>
+  useQuery({
+    queryKey: ["wali", semua],
+    queryFn: () => api<WaliRow[]>(semua ? "/wali?semua=1" : "/wali"),
+    enabled,
+  });
 
 /** Cocokkan nama atau nomor HP (0812…/62812…). */
 export function matches(term: string, nama: string, nomor: string[] = []) {
@@ -435,31 +440,28 @@ export function WaliPage() {
       ) : (
         <>
           <p className="mb-2 text-sm text-text2">{shown.length} wali</p>
-          <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {shown.slice(0, 300).map((w) => (
               <li key={w.id}>
-                <button
-                  type="button"
-                  onClick={() => setEditing(w)}
-                  className="h-full w-full rounded-card border border-border bg-surface p-4 text-left shadow-soft transition-colors hover:border-primary"
-                >
-                  <p className="font-semibold">
-                    {w.nama}
-                    {w.status === "nonaktif" && (
-                      <span className="ml-2 text-xs font-bold text-text2">Nonaktif</span>
-                    )}
-                  </p>
-                  <p className="text-sm text-text2">
-                    {w.phones.map((p) => formatPhone(p.nomor)).join(" · ")}
-                  </p>
-                  <p className="mt-2 text-sm">
-                    {w.anak.length ? (
+                <ListRow
+                  nama={w.nama}
+                  ket={w.phones.map((p) => formatPhone(p.nomor)).join(" · ")}
+                  sub={
+                    w.anak.length ? (
                       w.anak.map((a) => a.nama).join(", ")
                     ) : (
                       <span className="text-warn">Belum terhubung ke santri</span>
-                    )}
-                  </p>
-                </button>
+                    )
+                  }
+                  badge={
+                    w.status === "nonaktif" && (
+                      <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-bold text-text2">
+                        Nonaktif
+                      </span>
+                    )
+                  }
+                  onClick={() => setEditing(w)}
+                />
               </li>
             ))}
           </ul>

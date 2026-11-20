@@ -19,17 +19,18 @@ import { KELOMPOK } from "../../shared/sekolah";
 import type { Kelas, Lokasi, Mapel, TahunAjaran, Unit } from "../../shared/types";
 import { EntityForm } from "../components/EntityForm";
 import { MasterList } from "../components/MasterList";
-import { Card, PageHeader } from "../components/Page";
+import { Card, HubLink, PageHeader } from "../components/Page";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
+import type { AppPath } from "../lib/nav";
 import { HARI, hariOptions, useGuru, useLokasi, useTahunAjaran, useUnits } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, inputBase, inputClass } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 
 type HubItem = {
-  to: string;
+  to: AppPath;
   icon: LucideIcon;
   title: string;
   desc: string;
@@ -110,20 +111,9 @@ export function SekolahPage() {
         title="Data Sekolah"
         subtitle="Struktur lembaga, kelas, mapel, santri, dan wali."
       />
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {HUB.filter((h) => h.show(me)).map(({ to, icon: Icon, title, desc }) => (
-          <Link key={to} to={to} className="group">
-            <Card className="flex h-full items-center gap-4 transition-colors group-hover:border-primary">
-              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-soft text-on-soft">
-                <Icon size={22} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">{title}</p>
-                <p className="text-sm text-text2">{desc}</p>
-              </div>
-              <ChevronRight className="shrink-0 text-text2" />
-            </Card>
-          </Link>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {HUB.filter((h) => h.show(me)).map(({ to, icon, title, desc }) => (
+          <HubLink key={to} to={to} icon={icon} judul={title} ket={desc} />
         ))}
       </div>
     </>

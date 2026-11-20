@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Search, ShieldAlert, UserRound } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import type { Role, UserDetail } from "../../shared/types";
-import { Card, EmptyState, PageHeader } from "../components/Page";
+import { Card, EmptyState, ListRow, PageHeader } from "../components/Page";
 import { emptyPhone, PhonesEditor, phonesPayload, toDraft } from "../components/PhonesEditor";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
@@ -283,41 +283,33 @@ export function PenggunaPage() {
           {q ? "Tidak ada yang cocok dengan pencarian." : "Belum ada pengguna dengan status ini."}
         </EmptyState>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
           {shown.map((u) => (
             <li key={u.id}>
-              <button
-                type="button"
-                onClick={() => setEditing(u)}
-                className="h-full w-full rounded-card border border-border bg-surface p-4 text-left shadow-soft transition-colors hover:border-primary"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold">{u.nama}</p>
-                  {u.status === "nonaktif" && (
+              <ListRow
+                nama={u.nama}
+                ket={u.phones.map((p) => formatPhone(p.nomor)).join(" · ")}
+                sub={
+                  u.loginTerakhir
+                    ? `Masuk terakhir ${formatWaktu(u.loginTerakhir)}`
+                    : "Belum pernah masuk"
+                }
+                badge={
+                  u.status === "nonaktif" ? (
                     <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-bold text-text2">
                       Nonaktif
                     </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-text2">
-                  {u.phones.map((p) => formatPhone(p.nomor)).join(" · ")}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {u.roles.map((r) => (
-                    <span
-                      key={r.id}
-                      className="rounded-full bg-soft px-2.5 py-0.5 text-xs font-bold text-on-soft"
-                    >
-                      {r.nama}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-3 text-xs text-text2">
-                  {u.loginTerakhir
-                    ? `Masuk terakhir ${formatWaktu(u.loginTerakhir)}`
-                    : "Belum pernah masuk"}
-                </p>
-              </button>
+                  ) : (
+                    u.roles[0] && (
+                      <span className="max-w-24 shrink-0 truncate rounded-full bg-soft px-2.5 py-0.5 text-xs font-bold text-on-soft">
+                        {u.roles[0].nama}
+                        {u.roles.length > 1 && ` +${u.roles.length - 1}`}
+                      </span>
+                    )
+                  )
+                }
+                onClick={() => setEditing(u)}
+              />
             </li>
           ))}
         </ul>

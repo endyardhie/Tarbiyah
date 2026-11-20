@@ -12,7 +12,7 @@ import {
 import { type FormEvent, useMemo, useState } from "react";
 import type { Agenda } from "../../shared/types";
 import { ListSkeleton } from "../components/MasterList";
-import { Card, PageHeader } from "../components/Page";
+import { Card, HubLink, PageHeader } from "../components/Page";
 import {
   fromSasaran,
   type SasaranDraft,
@@ -80,27 +80,9 @@ export function InformasiPage() {
   return (
     <>
       <PageHeader title="Informasi" subtitle="Kalender, pengumuman, dan notifikasi." />
-      <div className="grid gap-3 md:grid-cols-3">
-        {items.map(({ to, icon: Icon, cls, title, desc, badge }) => (
-          <Link
-            key={to}
-            to={to}
-            className="flex min-h-20 items-center gap-4 rounded-[24px] border border-border bg-surface p-4 shadow-soft transition-colors hover:border-primary"
-          >
-            <span className={`grid size-12 shrink-0 place-items-center rounded-[18px] ${cls}`}>
-              <Icon size={22} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-bold">{title}</span>
-              <span className="block truncate text-sm text-text2">{desc}</span>
-            </span>
-            {badge > 0 && (
-              <span className="grid min-w-6 place-items-center rounded-full bg-danger px-1.5 text-xs font-bold text-on-danger">
-                {badge > 99 ? "99+" : badge}
-              </span>
-            )}
-            <ChevronRight size={20} className="shrink-0 text-text2" />
-          </Link>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {items.map(({ to, icon, cls, title, desc, badge }) => (
+          <HubLink key={to} to={to} icon={icon} cls={cls} judul={title} ket={desc} badge={badge} />
         ))}
       </div>
     </>

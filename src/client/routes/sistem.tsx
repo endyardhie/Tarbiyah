@@ -1,43 +1,6 @@
-import { Link } from "@tanstack/react-router";
-import {
-  ChevronRight,
-  DatabaseBackup,
-  History,
-  type LucideIcon,
-  ShieldCheck,
-  SlidersHorizontal,
-  Users,
-} from "lucide-react";
-import { Card, PageHeader } from "../components/Page";
+import { DatabaseBackup, History, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
+import { HubLink, PageHeader } from "../components/Page";
 import { hasPermission, useMe } from "../lib/auth";
-import type { AppPath } from "../lib/nav";
-
-function HubLink({
-  to,
-  icon: Icon,
-  judul,
-  ket,
-}: {
-  to: AppPath;
-  icon: LucideIcon;
-  judul: string;
-  ket: string;
-}) {
-  return (
-    <Link to={to} className="group">
-      <Card className="flex items-center gap-4 transition-colors group-hover:border-primary">
-        <span className="grid size-12 place-items-center rounded-full bg-soft text-on-soft">
-          <Icon size={22} />
-        </span>
-        <div className="flex-1">
-          <p className="font-semibold">{judul}</p>
-          <p className="text-sm text-text2">{ket}</p>
-        </div>
-        <ChevronRight className="text-text2" />
-      </Card>
-    </Link>
-  );
-}
 
 export function SistemPage() {
   const { data: me } = useMe();
@@ -45,7 +8,7 @@ export function SistemPage() {
   return (
     <>
       <PageHeader title="Sistem" subtitle="Pengguna, hak akses, pengaturan, dan backup." />
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {kelolaPengguna && (
           <>
             <HubLink

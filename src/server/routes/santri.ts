@@ -53,7 +53,9 @@ export function santriRoutes({ db }: AppDeps) {
 export function waliRoutes({ db }: AppDeps) {
   const guard = [requireUser, requirePermission("wali.kelola")] as const;
   return new Hono<AppEnv>()
-    .get("/", ...guard, async (c) => c.json(await listWali(db)))
+    .get("/", ...guard, async (c) =>
+      c.json(await listWali(db, { semua: c.req.query("semua") === "1" })),
+    )
     .post("/", ...guard, async (c) => {
       const input = await parseBody(c, waliSchema);
       return c.json(

@@ -1,17 +1,8 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  Download,
-  FilePlus2,
-  Printer,
-  Receipt,
-  RotateCcw,
-  Send,
-  SlidersHorizontal,
-  Trash2,
-} from "lucide-react";
+import { Download, FilePlus2, Printer, Receipt, RotateCcw, Send, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { formatRupiah, labelPeriode, METODE_LABEL, type TagihanRow } from "../../shared/keuangan";
-import { Card, EmptyState, PageHeader, TabBar } from "../components/Page";
+import { Card, EmptyState, PageHeader, SaringHp, TabBar } from "../components/Page";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal, formatWaktu, hariIniSekolah } from "../lib/format";
@@ -122,7 +113,6 @@ function TagihanStaf() {
       .filter((r) => (s ? r.status === s : r.status !== "batal"))
       .reduce((a, r) => a + r.total, 0);
 
-  const [saring, setSaring] = useState(false);
   const opsiNama = (list: { id: string; nama?: string; kode?: string }[] | undefined, id: string) =>
     list?.find((x) => x.id === id);
   const ringkas = [
@@ -198,32 +188,24 @@ function TagihanStaf() {
     <div className="space-y-4">
       <Card>
         {/* HP: cari + tombol Filter (lembar bawah). Layar lebar: semua filter berderet. */}
-        <div className="flex gap-2 sm:hidden">
-          <input
-            type="search"
-            aria-label="Cari santri"
-            placeholder="Cari santri"
-            title="Cari nama atau NIS"
-            className={`${inputBase} min-w-0 flex-1`}
-            value={f.q}
-            onChange={(e) => set("q")(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={() => setSaring(true)}
-            className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full border border-border bg-surface-raised px-4 font-semibold"
-          >
-            <SlidersHorizontal size={18} /> Filter
-            {aktif > 0 && (
-              <span className="grid size-5 place-items-center rounded-full bg-primary text-xs text-on-primary">
-                {aktif}
-              </span>
-            )}
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-text2 sm:hidden">
-          {[labelPeriode(f.periode), ...ringkas].join(" · ")}
-        </p>
+        <SaringHp
+          cari={
+            <input
+              type="search"
+              aria-label="Cari santri"
+              placeholder="Cari santri"
+              title="Cari nama atau NIS"
+              className={`${inputBase} w-full`}
+              value={f.q}
+              onChange={(e) => set("q")(e.target.value)}
+            />
+          }
+          filter={filterFields}
+          aktif={aktif}
+          ringkas={[labelPeriode(f.periode), ...ringkas].join(" · ")}
+          hasil={list.data ? rows.length : undefined}
+          onReset={() => setF((s) => ({ ...s, status: "", lokasiId: "", unitId: "", kelasId: "" }))}
+        />
         <div className="hidden gap-2 sm:flex sm:flex-wrap">
           {filterFields}
           <input
@@ -265,31 +247,38 @@ function TagihanStaf() {
         </EmptyState>
       ) : (
         <Card className="p-0 md:p-0">
-          <p className="border-b border-border px-5 py-3 text-sm text-text2">
+          <p className="border-b border-border px-4 py-3 text-sm text-text2 sm:px-5">
             {rows.length} tagihan · total {formatRupiah(sum())} · lunas {formatRupiah(sum("lunas"))}{" "}
             · belum {formatRupiah(sum("belum"))}
           </p>
           <ul className="divide-y divide-border">
             {rows.map((r) => (
-              <li key={r.id} className="flex flex-col gap-2 px-5 py-3 lg:flex-row lg:items-center">
+              <li key={r.id} className="px-4 py-3 sm:px-5 lg:flex lg:items-center lg:gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold">
-                    {r.santriNama} <span className="font-normal text-text2">· {r.nis}</span>
-                  </p>
-                  <p className="text-sm text-text2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 truncate font-semibold">
+                      {r.santriNama} <span className="font-normal text-text2">· {r.nis}</span>
+                    </p>
+                    <span className="shrink-0 font-bold tabular-nums lg:hidden">
+                      {formatRupiah(r.total)}
+                    </span>
+                  </div>
+                  <p className="truncate text-sm text-text2">
                     {r.kelasNama} · {r.unitKode} {r.lokasiNama} · SPP {labelPeriode(r.periode)}
                     {r.potongan > 0 && ` · potongan ${formatRupiah(r.potongan)}`}
                   </p>
                   {r.pembayaran && (
-                    <p className="text-sm text-text2">
+                    <p className="truncate text-sm text-text2">
                       {METODE_LABEL[r.pembayaran.metode]} · {formatWaktu(r.pembayaran.dibayarAt)}
                       {r.pembayaran.buktiWaDikirimAt && " · bukti WA dikirim"}
                     </p>
                   )}
                   {r.alasanBatal && <p className="text-sm text-text2">Alasan: {r.alasanBatal}</p>}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold tabular-nums">{formatRupiah(r.total)}</span>
+                <div className="mt-2 flex flex-wrap items-center gap-2 lg:mt-0">
+                  <span className="hidden font-bold tabular-nums lg:inline">
+                    {formatRupiah(r.total)}
+                  </span>
                   <StatusTagihan status={r.status} />
                   {r.status === "belum" && catat && (
                     <Button variant="secondary" onClick={() => setBayar(r)}>
@@ -317,23 +306,6 @@ function TagihanStaf() {
           </ul>
         </Card>
       )}
-      <Modal open={saring} onOpenChange={setSaring} title="Filter tagihan">
-        <div className="grid gap-2">{filterFields}</div>
-        <div className="mt-4 flex gap-2">
-          <Button
-            variant="secondary"
-            className="flex-1"
-            onClick={() =>
-              setF((s) => ({ ...s, status: "", lokasiId: "", unitId: "", kelasId: "" }))
-            }
-          >
-            Reset
-          </Button>
-          <Button className="flex-1" onClick={() => setSaring(false)}>
-            Tampilkan{list.data ? ` ${rows.length}` : ""}
-          </Button>
-        </div>
-      </Modal>
       {buat && <BuatTagihanModal periodeAwal={f.periode} onClose={() => setBuat(false)} />}
       {bayar && <BayarManualModal tagihan={bayar} onClose={() => setBayar(null)} />}
       {batal && <BatalModal tagihan={batal} onClose={() => setBatal(null)} />}
