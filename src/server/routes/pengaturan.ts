@@ -129,6 +129,9 @@ export function pengaturanRoutes({ db, storage, boss, config }: AppDeps) {
           const body = (await res.json().catch(() => null)) as {
             results?: { is_connected?: boolean; is_logged_in?: boolean };
           } | null;
+          if (res.status === 401) {
+            return c.json({ ok: false, pesan: "User atau password basic auth GOWA salah (401)" });
+          }
           if (!res.ok) return c.json({ ok: false, pesan: `GOWA menjawab status ${res.status}` });
           const r = body?.results;
           return c.json({

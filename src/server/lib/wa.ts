@@ -28,6 +28,7 @@ export async function gowaSend(
     message?: string;
     results?: { message_id?: string } | null;
   } | null;
+  if (res.status === 401) throw new Error("GOWA 401: user atau password basic auth salah");
   if (!res.ok || body?.code !== "SUCCESS") {
     // Pesan error GOWA pendek (mis. "you are not loggin"); dibatasi agar log tetap ringkas.
     throw new Error(
