@@ -40,7 +40,10 @@ export function EmptyState({
   );
 }
 
-/** Tab berbentuk pil. */
+/**
+ * Tab berbentuk pil. ≤3 tab: kontrol segmen selebar layar.
+ * Lebih dari itu: satu baris pil yang bisa digeser di HP (label tidak pernah terlipat).
+ */
 export function TabBar<T extends string>({
   tabs,
   value,
@@ -52,16 +55,32 @@ export function TabBar<T extends string>({
   onChange: (t: T) => void;
   label: (t: T) => string;
 }) {
+  const segmen = tabs.length <= 3;
   return (
-    <div className="mb-4 flex flex-wrap gap-2" role="tablist">
+    <div
+      role="tablist"
+      className={
+        segmen
+          ? "mb-4 grid auto-cols-fr grid-flow-col gap-1 rounded-[24px] border border-border bg-surface p-1 md:inline-grid md:min-w-96"
+          : "-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0"
+      }
+    >
       {tabs.map((t) => (
         <button
           key={t}
           type="button"
           role="tab"
           aria-selected={value === t}
-          onClick={() => onChange(t)}
-          className="min-h-11 rounded-full border border-border px-4 font-semibold text-text2 aria-selected:border-transparent aria-selected:bg-soft aria-selected:text-on-soft"
+          onClick={(e) => {
+            onChange(t);
+            // Tab yang terpotong di tepi layar digeser masuk agar terlihat penuh.
+            e.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest" });
+          }}
+          className={
+            segmen
+              ? "min-h-11 rounded-[20px] px-2 text-sm leading-tight font-semibold text-text2 transition-colors aria-selected:bg-primary aria-selected:text-on-primary"
+              : "min-h-11 shrink-0 rounded-full border border-border px-4 font-semibold whitespace-nowrap text-text2 aria-selected:border-transparent aria-selected:bg-primary aria-selected:text-on-primary"
+          }
         >
           {label(t)}
         </button>

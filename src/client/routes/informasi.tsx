@@ -22,51 +22,84 @@ import {
 } from "../components/SasaranEditor";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
-import { formatTanggal } from "../lib/format";
+import { formatTanggal, formatWaktu, hariIniSekolah } from "../lib/format";
 import { monthOf, tglDate, useHariIni } from "../lib/presensi";
+import { useJumlahNotif } from "../lib/push";
 import { HARI, useKelas, useLokasi, useUnits } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { Checkbox, ErrorAlert, Field, Input, Textarea } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 import { Badge } from "./sekolah";
 
+/** Hub Informasi: tiap kartu menampilkan isi terbaru, bukan hanya judul menu. */
 export function InformasiPage() {
+  const hariIni = hariIniSekolah();
+  const sampai = new Date(Date.parse(`${hariIni}T00:00:00Z`) + 30 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  // Kunci query sama dengan beranda wali agar data dipakai bersama.
+  const agenda = useQuery({
+    queryKey: ["agenda", "beranda", hariIni],
+    queryFn: () => api<Agenda[]>(`/agenda?dari=${hariIni}&sampai=${sampai}`),
+  });
+  const pengumuman = useQuery({
+    queryKey: ["pengumuman"],
+    queryFn: () => api<{ id: string; judul: string; dikirimAt: string }[]>("/pengumuman"),
+  });
+  const belum = useJumlahNotif().data?.belum ?? 0;
+  const a = agenda.data?.[0];
+  const p = pengumuman.data?.[0];
+  const items = [
+    {
+      to: "/informasi/kalender" as const,
+      icon: CalendarDays,
+      cls: "bg-warn-soft text-warn",
+      title: "Kalender",
+      desc: a
+        ? `${a.judul} · ${formatTanggal(tglDate(a.mulai), "UTC").replace(/^\w+, /, "")}`
+        : "Agenda & hari libur",
+      badge: 0,
+    },
+    {
+      to: "/informasi/pengumuman" as const,
+      icon: Megaphone,
+      cls: "bg-soft text-on-soft",
+      title: "Pengumuman",
+      desc: p ? `${p.judul} · ${formatWaktu(p.dikirimAt)}` : "Dari sekolah & guru",
+      badge: 0,
+    },
+    {
+      to: "/notifikasi" as const,
+      icon: Bell,
+      cls: "bg-info-soft text-info",
+      title: "Notifikasi",
+      desc: belum ? `${belum} belum dibaca` : "Semua sudah dibaca",
+      badge: belum,
+    },
+  ];
   return (
     <>
       <PageHeader title="Informasi" subtitle="Kalender, pengumuman, dan notifikasi." />
       <div className="grid gap-3 md:grid-cols-3">
-        <Link to="/informasi/kalender" className="group">
-          <Card className="flex h-full items-center gap-4 transition-colors group-hover:border-primary">
-            <span className="grid size-12 shrink-0 place-items-center rounded-full bg-soft text-on-soft">
-              <CalendarDays size={22} />
+        {items.map(({ to, icon: Icon, cls, title, desc, badge }) => (
+          <Link
+            key={to}
+            to={to}
+            className="flex min-h-20 items-center gap-4 rounded-[24px] border border-border bg-surface p-4 shadow-soft transition-colors hover:border-primary"
+          >
+            <span className={`grid size-12 shrink-0 place-items-center rounded-[18px] ${cls}`}>
+              <Icon size={22} />
             </span>
-            <div className="flex-1">
-              <p className="font-semibold">Kalender</p>
-              <p className="text-sm text-text2">Agenda & hari libur</p>
-            </div>
-            <ChevronRight className="text-text2" />
-          </Card>
-        </Link>
-        {[
-          {
-            to: "/informasi/pengumuman" as const,
-            icon: Megaphone,
-            title: "Pengumuman",
-            desc: "Dari sekolah & guru",
-          },
-          { to: "/notifikasi" as const, icon: Bell, title: "Notifikasi", desc: "Kotak masuk Anda" },
-        ].map(({ to, icon: Icon, title, desc }) => (
-          <Link key={to} to={to} className="group">
-            <Card className="flex h-full items-center gap-4 transition-colors group-hover:border-primary">
-              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-soft text-on-soft">
-                <Icon size={22} />
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold">{title}</span>
+              <span className="block truncate text-sm text-text2">{desc}</span>
+            </span>
+            {badge > 0 && (
+              <span className="grid min-w-6 place-items-center rounded-full bg-danger px-1.5 text-xs font-bold text-on-danger">
+                {badge > 99 ? "99+" : badge}
               </span>
-              <div className="flex-1">
-                <p className="font-semibold">{title}</p>
-                <p className="text-sm text-text2">{desc}</p>
-              </div>
-              <ChevronRight className="text-text2" />
-            </Card>
+            )}
+            <ChevronRight size={20} className="shrink-0 text-text2" />
           </Link>
         ))}
       </div>

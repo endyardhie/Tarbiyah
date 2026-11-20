@@ -3,7 +3,7 @@ import { CalendarOff, CheckCircle2, ClipboardCheck, Printer, Save } from "lucide
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Laporan, PresensiKelas, SantriRow, Status } from "../../shared/types";
 import { ListSkeleton } from "../components/MasterList";
-import { Card, EmptyState, PageHeader } from "../components/Page";
+import { Card, EmptyState, PageHeader, TabBar } from "../components/Page";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { useMe } from "../lib/auth";
 import { formatTanggal, formatWaktu } from "../lib/format";
@@ -538,20 +538,12 @@ export function PresensiPage() {
         }
       />
       {isiList.length > 0 && (
-        <div className="mb-4 flex gap-2" role="tablist">
-          {(["isi", "laporan"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              aria-selected={active === t}
-              onClick={() => setTab(t)}
-              className="min-h-11 rounded-full border border-border px-5 font-semibold text-text2 aria-selected:border-transparent aria-selected:bg-soft aria-selected:text-on-soft"
-            >
-              {t === "isi" ? "Isi" : "Laporan"}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          tabs={["isi", "laporan"] as const}
+          value={active}
+          onChange={setTab}
+          label={(t) => (t === "isi" ? "Isi presensi" : "Laporan")}
+        />
       )}
       <ErrorAlert>{hari.isError ? errorMessage(hari.error) : ""}</ErrorAlert>
       {active === "isi" && isiList.length > 0 ? (

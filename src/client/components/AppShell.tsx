@@ -1,7 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Bell, LayoutGrid, LogOut, UserRound, X } from "lucide-react";
+import { Bell, ChevronRight, LayoutGrid, LogOut, X } from "lucide-react";
 import { useState } from "react";
+import type { Me } from "../../shared/types";
 import { useLogout, useMe } from "../lib/auth";
 import { mobileNav, type NavItem, visibleNav } from "../lib/nav";
 import { useJumlahNotif } from "../lib/push";
@@ -82,6 +83,19 @@ function Sidebar() {
   );
 }
 
+function peranLabel(me: Me | null | undefined) {
+  if (!me) return "";
+  if (me.isAdmin) return "Admin";
+  const r = me.relasi;
+  const peran = [
+    ...me.user.roles.map((x) => x.nama),
+    ...(r.kelasWali.length ? ["Wali kelas"] : []),
+    ...(r.pengajaran.length ? ["Pengajar"] : []),
+    ...(r.anak.length ? ["Wali santri"] : []),
+  ];
+  return peran.join(" · ") || "Lihat profil";
+}
+
 function MenuSheet({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   const { data: me } = useMe();
   const logout = useLogout();
@@ -101,21 +115,38 @@ function MenuSheet({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
             <X size={22} />
           </Dialog.Close>
         </div>
-        <nav aria-label="Semua menu" className="grid grid-cols-2 gap-2">
-          {[...visibleNav(me), { to: "/profil" as const, label: "Profil", icon: UserRound }].map(
-            ({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                activeOptions={{ exact: to === "/" }}
-                onClick={() => onOpenChange(false)}
-                className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-surface px-3 font-semibold data-[status=active]:border-transparent data-[status=active]:bg-soft data-[status=active]:text-on-soft"
-              >
-                <Icon size={20} className="shrink-0" />
-                <span className="min-w-0 leading-tight">{label}</span>
-              </Link>
-            ),
-          )}
+        <Link
+          to="/profil"
+          onClick={() => onOpenChange(false)}
+          className="mb-4 flex min-h-16 items-center gap-3 rounded-[22px] bg-surface p-3 shadow-soft"
+        >
+          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-lg font-bold text-on-primary">
+            {(me?.user.namaPanggilan || me?.user.nama || "?").charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-bold">{me?.user.nama}</span>
+            <span className="block truncate text-sm text-text2">{peranLabel(me)}</span>
+          </span>
+          <ChevronRight size={20} className="shrink-0 text-text2" />
+        </Link>
+        <nav
+          aria-label="Semua menu"
+          className="grid grid-cols-4 gap-x-1 gap-y-3 max-[359px]:grid-cols-3"
+        >
+          {visibleNav(me).map(({ to, label, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              activeOptions={{ exact: to === "/" }}
+              onClick={() => onOpenChange(false)}
+              className="group flex min-h-[84px] flex-col items-center gap-1.5 rounded-2xl px-0.5 py-1 text-center text-xs font-semibold leading-tight"
+            >
+              <span className="grid size-13 place-items-center rounded-[18px] bg-soft text-on-soft transition-colors group-data-[status=active]:bg-primary group-data-[status=active]:text-on-primary">
+                <Icon size={22} strokeWidth={1.8} />
+              </span>
+              <span className="line-clamp-2">{label}</span>
+            </Link>
+          ))}
         </nav>
         <div className="mt-4 flex flex-wrap justify-between gap-2">
           <button
