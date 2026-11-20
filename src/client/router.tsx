@@ -8,17 +8,18 @@ import {
 import { Construction, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppShell } from "./components/AppShell";
-import { EmptyState, PageHeader } from "./components/Page";
+import { EmptyState } from "./components/Page";
 import { errorMessage } from "./lib/api";
 import { useMe } from "./lib/auth";
-import { type AppPath, NAV_ITEMS } from "./lib/nav";
+import type { AppPath } from "./lib/nav";
 import { usePublicConfig } from "./lib/sekolah";
 import { AkademikPage, PengaturanAkademikPage, TemplateRaporPage } from "./routes/akademik";
 import { PerangkatPage, ProfilPage, WajibGantiPasswordPage } from "./routes/akun";
 import { BerandaPage } from "./routes/beranda";
-import { CetakPresensiPage, CetakRaporPage } from "./routes/cetak";
+import { CetakKeuanganPage, CetakPresensiPage, CetakRaporPage } from "./routes/cetak";
 import { ImporPage } from "./routes/impor";
 import { InformasiPage, KalenderPage } from "./routes/informasi";
+import { KeuanganPage } from "./routes/keuangan";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
 import { AktifkanNotifikasiPage, NotifikasiPage } from "./routes/notifikasi";
 import { PengajaranPage } from "./routes/pengajaran";
@@ -75,27 +76,8 @@ function AuthGate() {
 
 const appRoute = createRoute({ getParentRoute: () => rootRoute, id: "app", component: AuthGate });
 
-// Halaman modul yang belum dibangun: judul + keterangan.
-const PLACEHOLDERS: Partial<Record<AppPath, string>> = {
-  "/keuangan": "Tagihan SPP, pembayaran, dan laporan keuangan.",
-};
-
-function Placeholder({ path }: { path: AppPath }) {
-  const item = NAV_ITEMS.find((i) => i.to === path);
-  if (!item) return null;
-  return (
-    <>
-      <PageHeader title={item.label} subtitle={PLACEHOLDERS[path]} />
-      <EmptyState icon={item.icon} title="Segera hadir">
-        Modul {item.label} sedang dibangun.
-      </EmptyState>
-    </>
-  );
-}
-
 const page = <P extends AppPath>(path: P, component: () => ReactNode) =>
   createRoute({ getParentRoute: () => appRoute, path, component });
-const placeholder = <P extends AppPath>(path: P) => page(path, () => <Placeholder path={path} />);
 
 const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/login", component: LoginPage }),
@@ -107,6 +89,11 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/cetak/rapor", component: CetakRaporPage }),
   createRoute({
     getParentRoute: () => rootRoute,
+    path: "/cetak/keuangan",
+    component: CetakKeuanganPage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
     path: "/lupa-password",
     component: LupaPasswordPage,
   }),
@@ -116,7 +103,7 @@ const routeTree = rootRoute.addChildren([
     page("/akademik", AkademikPage),
     page("/akademik/pengaturan", PengaturanAkademikPage),
     page("/akademik/template", TemplateRaporPage),
-    placeholder("/keuangan"),
+    page("/keuangan", KeuanganPage),
     page("/informasi", InformasiPage),
     page("/informasi/kalender", KalenderPage),
     page("/informasi/pengumuman", PengumumanPage),

@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
 import { useRef } from "react";
+import { formatRupiah, labelPeriode, METODE_LABEL } from "../../shared/keuangan";
 import type { RaporContext } from "../../shared/rapor-template";
 import { renderTemplate } from "../../shared/template";
 import type { Laporan } from "../../shared/types";
 import { api, errorMessage } from "../lib/api";
 import { useMe } from "../lib/auth";
-import { formatTanggal } from "../lib/format";
+import { formatTanggal, formatWaktu } from "../lib/format";
 import { STATUS, tglDate } from "../lib/presensi";
 import { PRINT_FONTS } from "../lib/print-fonts";
 import { usePublicConfig } from "../lib/sekolah";
 import { Button } from "../ui/Button";
+import type { LaporanKeuangan } from "./keuangan";
 
 /** Halaman cetak rekap presensi (A4 mendatar). PDF dibuat dari dialog cetak browser. */
 export function CetakPresensiPage() {
@@ -163,6 +165,129 @@ export function CetakRaporPage() {
           srcDoc={doc}
           className="mx-auto block h-[80dvh] w-full max-w-[210mm] rounded-xl bg-white shadow-soft"
         />
+      )}
+    </div>
+  );
+}
+
+/** Cetak laporan keuangan (A4 tegak): ringkasan per metode, pembayaran masuk, dan tunggakan. */
+export function CetakKeuanganPage() {
+  const me = useMe();
+  const config = usePublicConfig();
+  const qs = window.location.search.slice(1);
+  const lap = useQuery({
+    queryKey: ["keuangan", "laporan", qs],
+    queryFn: () => api<LaporanKeuangan>(`/keuangan/laporan?${qs}`),
+    enabled: !!me.data && config.isSuccess,
+  });
+  if (me.isSuccess && !me.data) return <Navigate to="/login" />;
+  const d = lap.data;
+  const fmt = (t: string) => formatTanggal(tglDate(t), "UTC").replace(/^\w+, /, "");
+  const total = d?.perMetode.reduce((a, m) => a + m.jumlah, 0) ?? 0;
+  const th = "border border-black px-1 text-left";
+  const td = "border border-black px-1";
+  return (
+    <div className="mx-auto max-w-[190mm] bg-white p-6 text-black print:p-0">
+      <div className="mb-4 flex gap-2 print:hidden">
+        <Button onClick={() => window.print()} disabled={!d}>
+          Cetak / Simpan PDF
+        </Button>
+        <Button variant="secondary" onClick={() => window.close()}>
+          Tutup
+        </Button>
+      </div>
+      {lap.isError && <p className="text-red-700">{errorMessage(lap.error)}</p>}
+      {!d ? (
+        <p>Memuat…</p>
+      ) : (
+        <div className="text-[9pt]">
+          <header className="mb-3 flex items-center gap-4 border-b-2 border-black pb-3">
+            {config.data?.logoUrl && (
+              <img src={config.data.logoUrl} alt="" className="size-16 object-contain" />
+            )}
+            <div>
+              <p className="text-lg font-bold uppercase">{config.data?.nama}</p>
+              <p className="text-sm">Laporan Penerimaan SPP</p>
+              <p className="text-sm">
+                Periode {fmt(d.dari)} – {fmt(d.sampai)}
+              </p>
+            </div>
+          </header>
+          <table className="mb-4 border-collapse">
+            <tbody>
+              {d.perMetode.map((m) => (
+                <tr key={m.metode}>
+                  <td className={td}>{METODE_LABEL[m.metode]}</td>
+                  <td className={`${td} text-right`}>{m.n} transaksi</td>
+                  <td className={`${td} text-right`}>{formatRupiah(m.jumlah)}</td>
+                </tr>
+              ))}
+              <tr className="font-bold">
+                <td className={td} colSpan={2}>
+                  Total
+                </td>
+                <td className={`${td} text-right`}>{formatRupiah(total)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <h2 className="mb-1 font-bold">Pembayaran masuk</h2>
+          <table className="mb-4 w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={th}>No</th>
+                <th className={th}>Tanggal</th>
+                <th className={th}>Nama</th>
+                <th className={th}>Bulan</th>
+                <th className={th}>Metode</th>
+                <th className={th}>Dicatat</th>
+                <th className={`${th} text-right`}>Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.pembayaran.map((p, i) => (
+                <tr key={p.id} className="break-inside-avoid">
+                  <td className={td}>{i + 1}</td>
+                  <td className={td}>{formatWaktu(p.dibayarAt)}</td>
+                  <td className={td}>
+                    {p.santriNama} ({p.nis})
+                  </td>
+                  <td className={td}>{labelPeriode(p.periode)}</td>
+                  <td className={td}>{METODE_LABEL[p.metode]}</td>
+                  <td className={td}>{p.dicatatOleh ?? "Otomatis"}</td>
+                  <td className={`${td} text-right`}>{formatRupiah(p.jumlah)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <h2 className="mb-1 font-bold">Tunggakan per {fmt(d.hariIni)}</h2>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={th}>No</th>
+                <th className={th}>Nama</th>
+                <th className={th}>Kelas</th>
+                <th className={th}>Bulan</th>
+                <th className={`${th} text-right`}>Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.tunggakan.map((t, i) => (
+                <tr key={t.santriId} className="break-inside-avoid">
+                  <td className={td}>{i + 1}</td>
+                  <td className={td}>
+                    {t.santriNama} ({t.nis})
+                  </td>
+                  <td className={td}>
+                    {t.kelasNama} · {t.unitKode} {t.lokasiNama}
+                  </td>
+                  <td className={td}>{t.periode.map(labelPeriode).join(", ")}</td>
+                  <td className={`${td} text-right`}>{formatRupiah(t.jumlah)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[8pt]">Dicetak {formatTanggal(new Date())}.</p>
+        </div>
       )}
     </div>
   );

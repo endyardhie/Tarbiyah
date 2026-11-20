@@ -12,7 +12,7 @@ import { isIos, useInstall } from "../lib/install";
 import { disablePush } from "../lib/push";
 import { usePublicConfig } from "../lib/sekolah";
 import { Button } from "../ui/Button";
-import { ErrorAlert, Field } from "../ui/Field";
+import { ErrorAlert, Field, Input } from "../ui/Field";
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -97,25 +97,7 @@ export function LoginPage() {
         onSubmit={submit}
         className="space-y-4 rounded-[28px] border border-border bg-surface p-5 shadow-soft sm:p-7"
       >
-        <Field label="Nomor HP">
-          {(id) => (
-            <div className="flex min-h-12 overflow-hidden rounded-2xl border border-border bg-surface-raised transition-colors focus-within:border-primary">
-              <span className="flex items-center border-r border-border bg-surface-muted px-4 font-semibold text-text2">
-                +62
-              </span>
-              <input
-                id={id}
-                className="min-w-0 flex-1 bg-transparent px-4 text-text placeholder:text-text2/70 focus:outline-none"
-                inputMode="tel"
-                autoComplete="tel-national"
-                placeholder="812 3456 7890"
-                value={nomor}
-                onChange={(e) => setNomor(e.target.value)}
-                required
-              />
-            </div>
-          )}
-        </Field>
+        <NomorField value={nomor} onChange={setNomor} />
         <Field label="Password">
           {(id) => (
             <PasswordInput
@@ -152,23 +134,153 @@ export function LoginPage() {
   );
 }
 
+function NomorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label="Nomor HP">
+      {(id) => (
+        <div className="flex min-h-12 overflow-hidden rounded-2xl border border-border bg-surface-raised transition-colors focus-within:border-primary">
+          <span className="flex items-center border-r border-border bg-surface-muted px-4 font-semibold text-text2">
+            +62
+          </span>
+          <input
+            id={id}
+            className="min-w-0 flex-1 bg-transparent px-4 text-text placeholder:text-text2/70 focus:outline-none"
+            inputMode="tel"
+            autoComplete="tel-national"
+            placeholder="812 3456 7890"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            required
+          />
+        </div>
+      )}
+    </Field>
+  );
+}
+
+/** Lupa password: kode 6 digit via WhatsApp → password baru. Admin tetap bisa reset manual. */
 export function LupaPasswordPage() {
+  const config = usePublicConfig();
+  const navigate = useNavigate();
+  const [tahap, setTahap] = useState<"nomor" | "kode" | "selesai">("nomor");
+  const [nomor, setNomor] = useState("");
+  const [kode, setKode] = useState("");
+  const [password, setPassword] = useState("");
+  const [token, setToken] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  const [error, setError] = useState("");
+
+  const minta = useMutation({
+    mutationFn: () => api("/auth/otp/minta", { body: { nomor, turnstileToken: token } }),
+    onSuccess: () => {
+      setTahap("kode");
+      setError("");
+    },
+    onError: (e) => setError(errorMessage(e)),
+    onSettled: () => setResetKey((k) => k + 1),
+  });
+  const reset = useMutation({
+    mutationFn: () => api("/auth/otp/reset", { body: { nomor, kode, passwordBaru: password } }),
+    onSuccess: () => setTahap("selesai"),
+    onError: (e) => setError(errorMessage(e)),
+  });
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (tahap === "nomor") {
+      if (!token) return setError("Tunggu verifikasi keamanan selesai");
+      minta.mutate();
+    } else reset.mutate();
+  }
+
+  const kartu = "space-y-4 rounded-[28px] border border-border bg-surface p-5 shadow-soft sm:p-7";
+  if (tahap === "selesai") {
+    return (
+      <AuthLayout>
+        <BrandHeader title="Password diganti" subtitle="Silakan masuk dengan password baru." />
+        <div className={kartu}>
+          <Button className="w-full" onClick={() => navigate({ to: "/login" })}>
+            Masuk
+          </Button>
+        </div>
+      </AuthLayout>
+    );
+  }
   return (
     <AuthLayout>
-      <BrandHeader title="Lupa password" subtitle="Reset password dilakukan oleh admin sekolah." />
-      <div className="space-y-4 rounded-[28px] border border-border bg-surface p-5 shadow-soft sm:p-7">
-        <p>
-          Hubungi admin atau tata usaha sekolah dan sebutkan nomor HP Anda. Admin akan memberi{" "}
-          <strong>password sementara</strong> yang wajib Anda ganti saat masuk.
+      <BrandHeader
+        title="Lupa password"
+        subtitle={
+          tahap === "nomor"
+            ? "Kode reset dikirim lewat WhatsApp ke nomor yang terdaftar."
+            : "Masukkan kode 6 angka dari WhatsApp dan password baru."
+        }
+      />
+      <form onSubmit={submit} className={kartu}>
+        {tahap === "nomor" ? (
+          <>
+            <NomorField value={nomor} onChange={setNomor} />
+            {config.data && (
+              <Turnstile
+                siteKey={config.data.turnstileSiteKey}
+                onToken={setToken}
+                resetKey={resetKey}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <p role="status" className="rounded-2xl bg-soft px-4 py-3 text-sm text-on-soft">
+              Bila nomor terdaftar dan aktif di WhatsApp, kode sudah dikirim. Berlaku 5 menit.
+            </p>
+            <Field label="Kode dari WhatsApp">
+              {(id) => (
+                <Input
+                  id={id}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={kode}
+                  onChange={(e) => setKode(e.target.value.replace(/\D/g, ""))}
+                  required
+                />
+              )}
+            </Field>
+            <Field label="Password baru" hint="Minimal 8 karakter.">
+              {(id) => (
+                <PasswordInput
+                  id={id}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              )}
+            </Field>
+          </>
+        )}
+        <ErrorAlert>{error}</ErrorAlert>
+        <Button type="submit" className="w-full" loading={minta.isPending || reset.isPending}>
+          {tahap === "nomor" ? "Kirim kode" : "Simpan password baru"}
+        </Button>
+        {tahap === "kode" && (
+          <Button variant="ghost" className="w-full" onClick={() => setTahap("nomor")}>
+            Minta kode lagi
+          </Button>
+        )}
+        <p className="text-sm text-text2">
+          Tidak punya WhatsApp atau kode tidak datang? Hubungi admin sekolah untuk password
+          sementara.
         </p>
-        <p className="text-sm text-text2">Reset lewat kode WhatsApp akan tersedia kemudian.</p>
         <Link
           to="/login"
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-primary px-5 font-semibold text-on-primary hover:bg-primary-hover"
+          className="inline-flex min-h-11 w-full items-center justify-center font-semibold text-primary hover:underline"
         >
           Kembali ke halaman masuk
         </Link>
-      </div>
+      </form>
     </AuthLayout>
   );
 }

@@ -1,6 +1,9 @@
 // Admin awal (+ data contoh dengan --contoh) untuk development/staging. Ditolak di production.
 // Di container: node dist/server/db/seed.js [--contoh]
 import { normalizePhone } from "../../shared/phone";
+import { schoolToday } from "../lib/tanggal";
+import { buatTagihan } from "../services/keuangan";
+import { schoolTimeZone } from "../services/pengaturan";
 import { ensureDefaultRoles } from "../services/roles";
 import { createFirstAdmin } from "../services/users";
 import { createDb, runMigrations } from "./client";
@@ -40,5 +43,9 @@ if (process.argv.includes("--contoh")) {
   );
   const n = await createSampleNilai(db);
   if (n) console.log(`Nilai contoh dibuat untuk 1 kelas (${n.santri} santri × ${n.mapel} mapel).`);
+  // Tagihan SPP bulan berjalan (idempoten) agar menu Keuangan langsung bisa dicoba.
+  const periode = schoolToday(await schoolTimeZone(db)).slice(0, 7);
+  const t = await buatTagihan(db, periode, { simpan: true });
+  if (t.dibuat) console.log(`Tagihan contoh ${periode}: ${t.dibuat} tagihan.`);
 }
 await pool.end();

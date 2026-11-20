@@ -26,7 +26,7 @@ await ensureDefaultRoles(db);
 
 const boss = createBoss(env.DATABASE_URL);
 await boss.start();
-await registerJobs(boss, db, await schoolTimeZone(db), {
+await registerJobs(boss, db, pool, await schoolTimeZone(db), {
   encryptionKey: env.APP_ENCRYPTION_KEY,
   appUrl: env.APP_URL,
 });

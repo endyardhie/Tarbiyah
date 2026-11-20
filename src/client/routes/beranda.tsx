@@ -1,13 +1,15 @@
 import { useQuery as useQ, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Activity, CheckCircle2, XCircle } from "lucide-react";
+import { formatRupiah, labelPeriode, METODE_LABEL } from "../../shared/keuangan";
 import { Card, PageHeader } from "../components/Page";
 import { api } from "../lib/api";
-import { useMe } from "../lib/auth";
+import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 import { isPureWali } from "../lib/nav";
 import { useHariIni } from "../lib/presensi";
 import { usePublicConfig } from "../lib/sekolah";
+import { useTagihanAnak } from "./keuangan-wali";
 
 type Health = { ok: boolean; versi: string; waktuSekolah: string; db: boolean; boss: boolean };
 
@@ -162,6 +164,112 @@ function KartuKehadiranAnak() {
   );
 }
 
+/** Wali: tagihan belum lunas + tombol Bayar. */
+function KartuTagihanAnak() {
+  const q = useTagihanAnak();
+  const belum = q.data?.anak.flatMap((a) =>
+    a.tagihan.filter((t) => t.status === "belum").map((t) => ({ ...t, anak: a.nama })),
+  );
+  if (!belum) return null;
+  const total = belum.reduce((a, t) => a + t.total, 0);
+  return (
+    <Card className="lg:col-span-6">
+      <p className="text-sm text-text2">Tagihan belum lunas</p>
+      <p className="text-3xl font-bold tabular-nums">{formatRupiah(total)}</p>
+      {belum.length === 0 ? (
+        <p className="mt-1 font-medium text-primary">Semua tagihan sudah lunas. Terima kasih.</p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-sm">
+          {belum.slice(0, 4).map((t) => (
+            <li key={t.id} className="flex justify-between gap-2">
+              <span>
+                {t.anak} · {labelPeriode(t.periode)}
+              </span>
+              <span className="tabular-nums">{formatRupiah(t.total)}</span>
+            </li>
+          ))}
+          {belum.length > 4 && <li className="text-text2">+{belum.length - 4} lainnya</li>}
+        </ul>
+      )}
+      {belum.length > 0 && (
+        <Link
+          to="/keuangan"
+          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-primary px-5 font-semibold text-on-primary hover:bg-primary-hover"
+        >
+          {q.data?.online ? "Bayar" : "Lihat tagihan"}
+        </Link>
+      )}
+    </Card>
+  );
+}
+
+type Ringkasan = {
+  periode: string;
+  tagihan: number;
+  nTagihan: number;
+  terbayar: number;
+  nLunas: number;
+  tunggakan: number;
+  nTunggak: number;
+  penerimaan: number;
+  terbaru: {
+    id: string;
+    santriNama: string;
+    periode: string;
+    jumlah: number;
+    metode: keyof typeof METODE_LABEL;
+    dibayarAt: string;
+  }[];
+};
+
+/** Bendahara/admin: ringkasan keuangan bulan berjalan. */
+function RingkasanKeuangan() {
+  const q = useQuery({
+    queryKey: ["keuangan", "ringkasan"],
+    queryFn: () => api<Ringkasan>("/keuangan/ringkasan"),
+  });
+  const d = q.data;
+  if (!d) return null;
+  const stat = (label: string, nilai: number, ket: string) => (
+    <div className="rounded-2xl bg-surface-muted p-3">
+      <p className="text-sm text-text2">{label}</p>
+      <p className="text-xl font-bold tabular-nums">{formatRupiah(nilai)}</p>
+      <p className="text-sm text-text2">{ket}</p>
+    </div>
+  );
+  return (
+    <Card className="lg:col-span-12">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Keuangan {labelPeriode(d.periode)}</h2>
+        <Link
+          to="/keuangan"
+          className="inline-flex min-h-11 items-center font-semibold text-primary"
+        >
+          Buka keuangan
+        </Link>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stat("Tagihan bulan ini", d.tagihan, `${d.nTagihan} tagihan`)}
+        {stat("Sudah dibayar", d.terbayar, `${d.nLunas} lunas`)}
+        {stat("Tunggakan", d.tunggakan, `${d.nTunggak} santri lewat jatuh tempo`)}
+        {stat("Penerimaan bulan ini", d.penerimaan, "semua periode")}
+      </div>
+      {d.terbaru.length > 0 && (
+        <ul className="mt-3 divide-y divide-border text-sm">
+          {d.terbaru.map((p) => (
+            <li key={p.id} className="flex justify-between gap-2 py-2">
+              <span>
+                {p.santriNama} · {labelPeriode(p.periode)} · {METODE_LABEL[p.metode]}
+              </span>
+              <span className="tabular-nums">{formatRupiah(p.jumlah)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export function BerandaPage() {
   const { data: me } = useMe();
   const config = usePublicConfig();
@@ -184,12 +292,16 @@ export function BerandaPage() {
         <section className="rounded-card bg-primary p-5 text-on-primary shadow-soft dark:bg-soft dark:text-on-soft md:p-6 lg:col-span-7">
           <h2 className="text-xl font-bold">Selamat datang di {config.data?.nama ?? "TARBIYAH"}</h2>
           <p className="mt-2 max-w-prose opacity-90">
-            Sistem informasi sekolah, pondok pesantren, dan madrasah. Fitur presensi, akademik,
-            keuangan, dan informasi akan muncul di sini secara bertahap.
+            Sistem informasi sekolah, pondok pesantren, dan madrasah: presensi, akademik, keuangan,
+            dan informasi dalam satu aplikasi.
           </p>
         </section>
         {me && !isPureWali(me) && <KartuPresensiStaf />}
         {me && me.relasi.anak.length > 0 && <KartuKehadiranAnak />}
+        {me && me.relasi.anak.length > 0 && <KartuTagihanAnak />}
+        {(hasPermission(me, "keuangan.lihat") || hasPermission(me, "keuangan.kelola")) && (
+          <RingkasanKeuangan />
+        )}
         {me?.isAdmin && <SystemStatus />}
       </div>
     </>

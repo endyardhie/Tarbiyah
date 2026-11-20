@@ -67,3 +67,17 @@ export type ProfileInput = z.input<typeof profileSchema>;
 export type UserCreateInput = z.input<typeof userCreateSchema>;
 export type UserUpdateInput = z.input<typeof userUpdateSchema>;
 export type RoleInput = z.input<typeof roleSchema>;
+
+export const otpMintaSchema = z.object({
+  nomor: z.string().min(1, "Nomor HP wajib diisi"),
+  turnstileToken: z.string().min(1, "Selesaikan verifikasi keamanan"),
+});
+
+export const otpResetSchema = z.object({
+  nomor: z.string().min(1, "Nomor HP wajib diisi"),
+  kode: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Kode terdiri dari 6 angka"),
+  passwordBaru: password,
+});

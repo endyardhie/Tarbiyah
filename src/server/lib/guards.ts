@@ -26,3 +26,15 @@ export const requirePermission =
     if (!user || !(await can(user, permission))) throw fail(403, "Anda tidak punya akses");
     await next();
   };
+
+/** Lolos bila punya salah satu izin (mis. bendahara: lihat/kelola/catat manual). */
+export const requireAnyPermission =
+  (...permissions: Permission[]): MiddlewareHandler<AppEnv> =>
+  async (c, next) => {
+    const user = c.get("user");
+    if (!user) throw fail(403, "Anda tidak punya akses");
+    for (const p of permissions) {
+      if (await can(user, p)) return next();
+    }
+    throw fail(403, "Anda tidak punya akses");
+  };

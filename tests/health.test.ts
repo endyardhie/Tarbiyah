@@ -14,7 +14,7 @@ beforeAll(async () => {
   t = await createTestDb();
   boss = createBoss(t.url);
   await boss.start();
-  await registerJobs(boss, t.db, "Asia/Jayapura", {
+  await registerJobs(boss, t.db, t.pool, "Asia/Jayapura", {
     encryptionKey: Buffer.alloc(32, 1).toString("base64"),
     appUrl: "https://x",
   });

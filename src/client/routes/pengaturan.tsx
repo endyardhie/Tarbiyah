@@ -8,6 +8,7 @@ import { useMe } from "../lib/auth";
 import { makeLogoSet } from "../lib/image";
 import { Button } from "../ui/Button";
 import { ErrorAlert, Field, Input, inputClass, Textarea } from "../ui/Field";
+import { PengaturanKeuanganCards } from "./pengaturan-keuangan";
 
 const ZONA_LABEL: Record<string, string> = {
   "Asia/Jakarta": "WIB (Asia/Jakarta)",
@@ -210,7 +211,10 @@ export function PengaturanPage() {
   }
   return (
     <>
-      <PageHeader title="Pengaturan" subtitle="Identitas lembaga, zona waktu, dan logo aplikasi." />
+      <PageHeader
+        title="Pengaturan"
+        subtitle="Identitas lembaga, logo, tagihan, WA gateway, dan payment gateway."
+      />
       {ident.isError && <ErrorAlert>{errorMessage(ident.error)}</ErrorAlert>}
       {ident.data && (
         <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
@@ -222,6 +226,7 @@ export function PengaturanPage() {
             <h2 className="mb-4 text-lg font-semibold">Logo & ikon aplikasi</h2>
             <LogoForm data={ident.data} />
           </Card>
+          <PengaturanKeuanganCards />
         </div>
       )}
     </>

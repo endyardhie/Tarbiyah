@@ -14,6 +14,7 @@ import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
 import { imporRoutes } from "./routes/impor";
 import { notifikasiRoutes, pengumumanRoutes, pushRoutes } from "./routes/informasi";
+import { keuanganRoutes, webhookRoutes } from "./routes/keuangan";
 import { meRoutes } from "./routes/me";
 import { fileRoutes, pengaturanRoutes, servePublicFile } from "./routes/pengaturan";
 import { presensiRoutes } from "./routes/presensi";
@@ -43,7 +44,9 @@ export function createApp(deps: AppDeps) {
     .use(async (c, next) => {
       c.set("ip", clientIp(c, config.trustCloudflare));
       // Cegah CSRF: request yang mengubah data harus datang dari APP_URL.
-      if (!SAFE_METHODS.has(c.req.method) && c.req.header("origin") !== appOrigin) {
+      // Webhook dari server provider (bukan browser) tidak membawa Origin; diverifikasi tanda tangan.
+      const webhook = c.req.path.startsWith("/api/webhooks/");
+      if (!webhook && !SAFE_METHODS.has(c.req.method) && c.req.header("origin") !== appOrigin) {
         throw fail(403, "Asal permintaan tidak diizinkan");
       }
       c.set("user", null);
@@ -89,6 +92,8 @@ export function createApp(deps: AppDeps) {
     .route("/penilaian", penilaianRoutes(deps))
     .route("/akademik", akademikRoutes(deps))
     .route("/rapor", raporRoutes(deps))
+    .route("/keuangan", keuanganRoutes(deps))
+    .route("/webhooks", webhookRoutes(deps))
     .all("*", (c) => c.json({ error: "Tidak ditemukan" }, 404));
 
   const app = new Hono().route("/api", api).onError((err, c) => {

@@ -20,6 +20,7 @@ import {
   semester,
   settings,
   tahunAjaran,
+  tarifSpp,
   units,
   userPhones,
   userRoles,
@@ -140,6 +141,18 @@ export async function createSampleData(db: Db) {
       .values({ nama: "2026/2027", mulai: "2026-07-13", selesai: "2027-06-30", aktif: true })
       .returning();
     if (!ta) throw new Error("tahun ajaran gagal dibuat");
+    // Tarif SPP contoh per unit + lokasi (RAHE sedikit lebih murah).
+    const TARIF: Record<string, number> = { TA: 100_000, MDTU: 150_000, MDTW: 175_000 };
+    await tx.insert(tarifSpp).values(
+      un.flatMap((u) =>
+        lok.map((l) => ({
+          tahunAjaranId: ta.id,
+          unitId: u.id,
+          lokasiId: l.id,
+          nominal: (TARIF[u.kode] ?? 150_000) - (l.nama === "RAHE" ? 25_000 : 0),
+        })),
+      ),
+    );
     await tx.insert(semester).values([
       { tahunAjaranId: ta.id, nomor: 1, mulai: "2026-07-13", selesai: "2026-12-19", aktif: true },
       { tahunAjaranId: ta.id, nomor: 2, mulai: "2027-01-04", selesai: "2027-06-30" },

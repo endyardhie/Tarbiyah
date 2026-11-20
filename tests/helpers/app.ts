@@ -121,6 +121,7 @@ export async function createTestContext(overrides: Partial<AppConfig> & { boss?:
     makeUser,
     roleId,
     scheduled,
+    boss,
     clock,
     jobs,
     storage: createStorage(storageDir),

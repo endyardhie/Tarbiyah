@@ -32,3 +32,13 @@ export function formatPhone(nomor: string) {
   const local = nomor.startsWith("62") ? `0${nomor.slice(2)}` : nomor;
   return local.replace(/^(\d{4})(\d{4})(\d+)$/, "$1-$2-$3");
 }
+
+/** Bulan berjalan "YYYY-MM" & tanggal hari ini "YYYY-MM-DD" menurut zona waktu sekolah. */
+export function hariIniSekolah(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: schoolTz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}

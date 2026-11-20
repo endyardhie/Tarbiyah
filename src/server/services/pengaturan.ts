@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Identitas } from "../../shared/sekolah";
 import type { Db, Tx } from "../db/client";
 import { settings } from "../db/schema";
+import { KEY_VERSION } from "../lib/crypto";
 
 export const DEFAULT_IDENTITAS: Identitas = {
   nama: "TARBIYAH",
@@ -46,4 +47,28 @@ export async function isSampleData(db: Db) {
     .from(settings)
     .where(eq(settings.key, "data_contoh"));
   return !!row;
+}
+
+/** Baca pengaturan berbentuk objek, dilengkapi nilai bawaan. */
+export async function readSetting<T extends object>(
+  db: Db | Tx,
+  key: string,
+  defaults: T,
+): Promise<T> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, key));
+  return { ...defaults, ...((row?.value as Partial<T>) ?? {}) };
+}
+
+/** Simpan pengaturan; `terenkripsi` menandai value berisi secret AES-GCM (lihat lib/crypto). */
+export async function writeSetting(tx: Db | Tx, key: string, value: object, terenkripsi = false) {
+  const set = {
+    value,
+    terenkripsi,
+    versiKunci: terenkripsi ? KEY_VERSION : null,
+    diubahAt: new Date(),
+  };
+  await tx
+    .insert(settings)
+    .values({ key, ...set })
+    .onConflictDoUpdate({ target: settings.key, set });
 }

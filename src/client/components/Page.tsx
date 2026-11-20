@@ -39,3 +39,33 @@ export function EmptyState({
     </Card>
   );
 }
+
+/** Tab berbentuk pil. */
+export function TabBar<T extends string>({
+  tabs,
+  value,
+  onChange,
+  label,
+}: {
+  tabs: T[];
+  value: T;
+  onChange: (t: T) => void;
+  label: (t: T) => string;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2" role="tablist">
+      {tabs.map((t) => (
+        <button
+          key={t}
+          type="button"
+          role="tab"
+          aria-selected={value === t}
+          onClick={() => onChange(t)}
+          className="min-h-11 rounded-full border border-border px-4 font-semibold text-text2 aria-selected:border-transparent aria-selected:bg-soft aria-selected:text-on-soft"
+        >
+          {label(t)}
+        </button>
+      ))}
+    </div>
+  );
+}

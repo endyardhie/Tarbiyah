@@ -7,7 +7,7 @@ import { DEFAULT_TEMPLATE, SAMPLE_CONTEXT } from "../../shared/rapor-template";
 import { checkTemplate, renderTemplate } from "../../shared/template";
 import type { SantriRow } from "../../shared/types";
 import { ListSkeleton } from "../components/MasterList";
-import { Card, EmptyState, PageHeader } from "../components/Page";
+import { Card, EmptyState, PageHeader, TabBar } from "../components/Page";
 import { ajarLabel, type Lampiran, useAjar } from "../lib/akademik";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
@@ -30,35 +30,6 @@ const TAB_LABEL: Record<Tab, string> = {
   "rapor-mapel": "Rapor mapel",
   "rapor-kelas": "Rapor kelas",
 };
-
-function TabBar<T extends string>({
-  tabs,
-  value,
-  onChange,
-  label,
-}: {
-  tabs: T[];
-  value: T;
-  onChange: (t: T) => void;
-  label: (t: T) => string;
-}) {
-  return (
-    <div className="mb-4 flex flex-wrap gap-2" role="tablist">
-      {tabs.map((t) => (
-        <button
-          key={t}
-          type="button"
-          role="tab"
-          aria-selected={value === t}
-          onClick={() => onChange(t)}
-          className="min-h-11 rounded-full border border-border px-4 font-semibold text-text2 aria-selected:border-transparent aria-selected:bg-soft aria-selected:text-on-soft"
-        >
-          {label(t)}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function AkademikStaf() {
   const { data: me } = useMe();
