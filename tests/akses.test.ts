@@ -11,6 +11,7 @@ import { createTestContext, ORIGIN, type TestContext } from "./helpers/app";
 let t: TestContext;
 let wali: string;
 let guru: string;
+let santriLain: string;
 const UUID = "01960000-0000-7000-8000-000000000000";
 
 const PUBLIK = new Set([
@@ -90,6 +91,8 @@ beforeAll(async () => {
     })
   ).body.id;
   const s = (await post("/api/santri", { nis: "Z1", nama: "Zaid", kelasId: kelas })).body.id;
+  // Santri lain di kelas yang sama, dengan wali lain: tidak boleh terlihat oleh wali Zaid.
+  santriLain = (await post("/api/santri", { nis: "Z2", nama: "Yusuf", kelasId: kelas })).body.id;
   const w = (await post("/api/wali", { nama: "Wali Zaid", phones: [{ nomor: "6282400000200" }] }))
     .body;
   await t.req("PUT", "/api/santri-wali", { cookie: admin, body: { santriId: s, userId: w.id } });
@@ -140,6 +143,31 @@ describe("matriks hak akses semua endpoint", () => {
         bocor.push(`${r.method} ${r.path} → ${res.status}`);
     }
     expect(bocor).toEqual([]);
+  });
+});
+
+describe("akses berbasis relasi (id sungguhan)", () => {
+  it("wali tidak bisa membuka data santri lain lewat endpoint ber-parameter santri", async () => {
+    const bocor: string[] = [];
+    const rute = semuaRute().filter((r) => r.method === "GET" && r.path.includes(":santriId"));
+    expect(rute.length).toBeGreaterThan(0);
+    for (const r of rute) {
+      const path = r.path.replace(":santriId", santriLain).replace(/:[A-Za-z]+/g, UUID);
+      const res = await t.req("GET", path, { cookie: wali });
+      if (res.status < 400 || res.status >= 500) bocor.push(`${r.path} → ${res.status}`);
+    }
+    const lain = [
+      `/api/santri/${santriLain}`,
+      `/api/presensi/laporan?santriId=${santriLain}&dari=2026-11-01&sampai=2026-11-30`,
+    ];
+    for (const path of lain) {
+      const res = await t.req("GET", path, { cookie: wali });
+      if (res.status < 400 || res.status >= 500) bocor.push(`${path} → ${res.status}`);
+    }
+    expect(bocor).toEqual([]);
+    // Pembanding: data anaknya sendiri tetap bisa dibuka.
+    const anak = await t.req("GET", "/api/keuangan/anak", { cookie: wali });
+    expect(anak.body.anak.map((a: { nis: string }) => a.nis)).toEqual(["Z1"]);
   });
 });
 

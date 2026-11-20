@@ -31,6 +31,7 @@ import { requirePermission, requireUser } from "../lib/guards";
 import {
   assertActiveUser,
   assertKelasBukanArsip,
+  assertPengajaranBukanArsip,
   assertTaBukanArsip,
   resolveTahunAjaran,
 } from "../services/sekolah";
@@ -133,8 +134,9 @@ export function sekolahRoutes({ db }: AppDeps) {
         schema: kelasSchema,
         permission: "kelas.kelola",
         entitas: "kelas",
-        check: async (tx, data) => {
+        check: async (tx, data, _id, before) => {
           await assertTaBukanArsip(tx, data.tahunAjaranId);
+          if (before) await assertTaBukanArsip(tx, before.tahunAjaranId as string);
           await assertActiveUser(tx, data.waliKelasId, "Wali kelas");
         },
         list: async (c) => {
@@ -183,10 +185,12 @@ export function sekolahRoutes({ db }: AppDeps) {
         permission: "jadwal.kelola",
         entitas: "pengajaran",
         canDelete: true,
-        check: async (tx, data) => {
+        check: async (tx, data, _id, before) => {
           await assertKelasBukanArsip(tx, data.kelasId);
+          if (before) await assertKelasBukanArsip(tx, before.kelasId as string);
           await assertActiveUser(tx, data.guruId, "Guru");
         },
+        checkDelete: (tx, before) => assertKelasBukanArsip(tx, before.kelasId as string),
         list: async (c) => {
           const ta = await resolveTahunAjaran(db, queryId(c, "tahunAjaranId"));
           if (!ta) return [];
@@ -236,6 +240,11 @@ export function sekolahRoutes({ db }: AppDeps) {
         permission: "jadwal.kelola",
         entitas: "jadwal",
         canDelete: true,
+        check: async (tx, data, _id, before) => {
+          await assertPengajaranBukanArsip(tx, data.pengajaranId);
+          if (before) await assertPengajaranBukanArsip(tx, before.pengajaranId as string);
+        },
+        checkDelete: (tx, before) => assertPengajaranBukanArsip(tx, before.pengajaranId as string),
       }),
     )
     .route(

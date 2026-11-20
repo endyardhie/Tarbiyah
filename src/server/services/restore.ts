@@ -13,6 +13,7 @@ import {
   eksklusif,
   getB2,
   jalankanBackup,
+  type KendaliJobs,
   pgRestore,
   sinkronDaftarBackup,
   versiSkemaAplikasi,
@@ -99,25 +100,45 @@ async function pulihkanBerkas(deps: BackupDeps) {
  * pg_restore gagal → kondisi sebelum restore dipulihkan dari backup otomatis tadi.
  */
 export async function pulihkan(
-  deps: BackupDeps & { setelahRestore?: () => Promise<void> },
+  deps: BackupDeps & {
+    setelahRestore?: () => Promise<void>;
+    jobs?: KendaliJobs;
+    /** Bisa diganti di tes untuk mensimulasikan pg_restore gagal. */
+    restoreDump?: typeof pgRestore;
+  },
   id: string,
 ) {
+  const restoreDump = deps.restoreDump ?? pgRestore;
   return eksklusif(async () => {
     const cek = await cekRestore(deps, id);
     if (!cek.boleh) throw fail(409, cek.pesan);
+    // Worker dijeda dulu (job yang sedang jalan dibiarkan selesai), baru mode pemeliharaan.
+    await deps.jobs?.jeda();
     pemeliharaan.mulai("Membuat backup kondisi sekarang");
+    let macet = false;
     try {
-      const pra = await jalankanBackup(deps, { jenis: "pra_restore" });
+      // Tanpa retensi: dump lama (termasuk yang akan dipulihkan) tidak boleh terhapus di sini.
+      const pra = await jalankanBackup(deps, { jenis: "pra_restore", retensi: false });
       pemeliharaan.tahap("Memulihkan database");
-      // Beri waktu request & job yang sedang berjalan untuk selesai.
+      // Beri waktu request yang sedang berjalan untuk selesai.
       await new Promise((r) => setTimeout(r, 1500));
       await kosongkanSkema(deps);
       try {
-        await pgRestore(deps.storage, dumpKey(cek.nama), deps.databaseUrl);
+        await restoreDump(deps.storage, dumpKey(cek.nama), deps.databaseUrl);
       } catch (e) {
         pemeliharaan.tahap("Restore gagal, mengembalikan kondisi sebelumnya");
-        await kosongkanSkema(deps);
-        await pgRestore(deps.storage, dumpKey(pra.nama), deps.databaseUrl);
+        try {
+          await kosongkanSkema(deps);
+          await restoreDump(deps.storage, dumpKey(pra.nama), deps.databaseUrl);
+        } catch (e2) {
+          // Database kosong: aplikasi tetap dikunci sampai pengelola memulihkan manual.
+          macet = true;
+          pemeliharaan.macet(
+            `Pemulihan gagal dan kondisi sebelumnya tidak bisa dikembalikan otomatis. Pulihkan manual dari dump ${pra.nama} (lihat DEPLOY.md, "Restore manual").`,
+            `${safeError(e)}\n---\n${safeError(e2)}`,
+          );
+          throw e2;
+        }
         throw e;
       }
       pemeliharaan.tahap("Menjalankan migrasi");
@@ -136,8 +157,17 @@ export async function pulihkan(
       pemeliharaan.selesai(false, `Pemulihan dari ${cek.nama} selesai.${info}`);
     } catch (e) {
       console.error(`[restore] ${safeError(e)}`);
-      pemeliharaan.selesai(true, `Pemulihan gagal: ${safeError(e).slice(0, 300)}`);
+      if (!macet) {
+        pemeliharaan.selesai(
+          true,
+          "Pemulihan gagal. Data tetap seperti sebelum restore.",
+          safeError(e).slice(0, 2000),
+        );
+      }
       throw e;
+    } finally {
+      if (!macet)
+        await deps.jobs?.lanjut().catch((e) => console.error(`[restore] ${safeError(e)}`));
     }
   });
 }

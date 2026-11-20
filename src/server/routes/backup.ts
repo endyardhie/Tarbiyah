@@ -6,6 +6,7 @@ import { pengaturanBackupSchema } from "../../shared/backup";
 import { backupFile } from "../db/schema";
 import { QUEUES } from "../jobs/queues";
 import { audit } from "../lib/audit";
+import { can } from "../lib/can";
 import { type AppDeps, type AppEnv, currentUser, fail, paramId, parseBody } from "../lib/context";
 import { requirePermission, requireUser } from "../lib/guards";
 import { safeError } from "../lib/log";
@@ -42,9 +43,12 @@ export function backupRoutes(deps: AppDeps) {
   return (
     new Hono<AppEnv>()
       /** Status mode pemeliharaan (dibuka tanpa login: sesi bisa hilang di tengah restore). */
-      .get("/status", (c) => {
+      /** Tanpa login: hanya status umum. Rincian teknis kegagalan hanya untuk admin. */
+      .get("/status", async (c) => {
         const s = pemeliharaan.status();
-        return c.json({ ...s, sibuk: sedangSibuk() });
+        const user = c.get("user");
+        const admin = !!user && (await can(user, "backup.kelola"));
+        return c.json({ ...s, sibuk: sedangSibuk(), detail: admin ? pemeliharaan.detail() : null });
       })
       .get("/pengaturan", ...admin, async (c) => c.json(await getBackupView(db)))
       .put("/pengaturan", ...admin, async (c) => {
@@ -152,7 +156,7 @@ export function backupRoutes(deps: AppDeps) {
         // Berjalan di latar; kemajuan dibaca dari /api/backup/status.
         const userId = currentUser(c).id;
         const ip = c.get("ip");
-        void pulihkan({ ...bd, setelahRestore: deps.setelahRestore }, id)
+        void pulihkan({ ...bd, setelahRestore: deps.setelahRestore, jobs: deps.jobs }, id)
           .then(() =>
             // Catat lagi di audit hasil restore; pengguna bisa saja belum ada di backup itu.
             audit(db, {

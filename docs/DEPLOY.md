@@ -230,20 +230,31 @@ Coolify → resource PostgreSQL → **Backups**:
 - Port terbuka dari internet hanya **22, 80, 443**. Port PostgreSQL, GOWA, noken-pay, dan dashboard
   Coolify (8000/6001/6002) tidak dibuka; dashboard Coolify dipasang di domain di belakang
   Cloudflare/Access.
-- 80/443 **hanya dari IP Cloudflare** (syarat `TRUST_CLOUDFLARE=true`). Karena Docker melewati
-  aturan `ufw` untuk port yang dipublikasikan container (Traefik), pasang aturan di rantai
-  `DOCKER-USER`, mis. (jalankan sebagai root, sesuaikan nama interface publik `eth0`):
+- 80/443 **hanya dari IP Cloudflare** (syarat `TRUST_CLOUDFLARE=true`). Docker melewati aturan
+  `ufw` untuk port yang dipublikasikan container (Traefik), jadi aturannya dipasang di rantai
+  `DOCKER-USER`. Rantai ini biasanya sudah berakhir dengan `RETURN` bawaan Docker, sehingga aturan
+  yang ditambahkan dengan `-A` di belakangnya **tidak pernah berlaku**. Pakai `-I` (sisip di atas):
+  pertama `DROP`, lalu `RETURN` per IP Cloudflare yang disisipkan di atas `DROP` itu. Jalankan
+  sebagai root, sesuaikan interface publik `eth0`:
+
+  ```bash
+  iptables -I DOCKER-USER -i eth0 -p tcp -m multiport --dports 80,443 -j DROP
+  ```
 
   ```bash
   for ip in $(curl -s https://www.cloudflare.com/ips-v4); do iptables -I DOCKER-USER -i eth0 -p tcp -m multiport --dports 80,443 -s "$ip" -j RETURN; done
   ```
 
+  Periksa urutannya: `iptables -L DOCKER-USER -n --line-numbers` harus menampilkan semua `RETURN`
+  Cloudflare **di atas** `DROP`. Ulangi untuk IPv6 (`ip6tables`, `https://www.cloudflare.com/ips-v6`),
+  simpan dengan `iptables-persistent` (`netfilter-persistent save`), dan perbarui bila daftar IP
+  Cloudflare berubah. Uji dari mesin lain (bukan lewat Cloudflare):
+
   ```bash
-  iptables -A DOCKER-USER -i eth0 -p tcp -m multiport --dports 80,443 -j DROP
+  curl -m 5 -I http://<IP-server>
   ```
 
-  Simpan dengan `iptables-persistent`, ulangi untuk IPv6 (`ip6tables`, `ips-v6`) dan perbarui bila
-  daftar IP Cloudflare berubah. Uji dari luar Cloudflare: `curl -I http://<IP-server>` harus gagal.
+  Perintah itu harus **timeout**; sedangkan `https://<domain>` lewat Cloudflare tetap terbuka.
 - Cloudflare: SSL **Full (strict)**, *Always Use HTTPS*, WAF bawaan aktif.
 - Update OS & Coolify rutin.
 
@@ -264,7 +275,28 @@ Bila server hilang:
    lalu jalankan langkah 4 hanya untuk mengunduh berkas (atau salin `tarbiyah/files/` manual).
 7. Atur ulang domain/DNS Cloudflare, GOWA (scan QR ulang), dan noken-pay (URL webhook).
 
-### 11. Uji sebelum dipakai
+### 11. Restore manual (bila aplikasi terkunci)
+
+Bila restore dari aplikasi gagal **dan** kondisi sebelumnya juga gagal dikembalikan, aplikasi
+mengunci diri (semua halaman menampilkan "Aplikasi dikunci") dan menyebut nama dump pra-restore,
+mis. `tarbiyah-20261120-1755`. Pulihkan manual dari Terminal container:
+
+```bash
+pg_restore --clean --if-exists --no-owner --no-privileges --single-transaction --exit-on-error --dbname="$DATABASE_URL" /data/backups/tarbiyah-20261120-1755.dump
+```
+
+Bila gagal karena tabel sudah tidak ada/berantakan, kosongkan skema dulu (hati-hati: menghapus isi
+database aplikasi; skema `pgboss` tidak disentuh):
+
+```bash
+psql "$DATABASE_URL" -c "drop schema if exists public cascade; create schema public; drop schema if exists drizzle cascade"
+```
+
+Lalu **Restart** aplikasi di Coolify (status kunci hanya disimpan di memori dan migrasi berjalan
+saat start). Bila dump lokal juga hilang, ambil dari B2 `tarbiyah/db/` atau pakai backup lapis 2
+Coolify.
+
+### 12. Uji sebelum dipakai
 
 - Simulasi naik kelas di staging (Data Sekolah › Tahun ajaran baru) dengan data contoh.
 - Backup → restore di staging, termasuk **dari B2** ke database & volume kosong.

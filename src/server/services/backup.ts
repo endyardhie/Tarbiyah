@@ -64,6 +64,9 @@ export async function saveBackupSetting(
   );
 }
 
+/** Jeda/lanjutkan semua worker pg-boss (dipakai restore). */
+export type KendaliJobs = { jeda(): Promise<void>; lanjut(): Promise<void> };
+
 export type BackupDeps = {
   db: Db;
   pool: pg.Pool;
@@ -201,9 +204,10 @@ export async function pgRestore(storage: Storage, key: string, databaseUrl: stri
 // ------------------------------------------------------------------ backup
 
 let sibuk = false;
+export const PESAN_SIBUK = "Backup atau restore lain sedang berjalan";
 /** Backup dan restore tidak boleh berjalan bersamaan (satu container). */
 export async function eksklusif<T>(fn: () => Promise<T>): Promise<T> {
-  if (sibuk) throw new Error("Backup atau restore lain sedang berjalan");
+  if (sibuk) throw new Error(PESAN_SIBUK);
   sibuk = true;
   try {
     return await fn();
@@ -278,7 +282,12 @@ async function unggahKeB2(deps: BackupDeps, b2: B2, nama: string) {
  */
 export async function jalankanBackup(
   deps: BackupDeps,
-  opts: { jenis: "otomatis" | "manual" | "pra_restore"; userId?: string | null },
+  opts: {
+    jenis: "otomatis" | "manual" | "pra_restore";
+    userId?: string | null;
+    /** false: jangan hapus dump lama (backup pra-restore tidak boleh menghapus dump sumbernya). */
+    retensi?: boolean;
+  },
 ) {
   const { db, storage } = deps;
   const nama = await namaBaru(db);
@@ -330,7 +339,7 @@ export async function jalankanBackup(
         selesaiAt: new Date(),
       })
       .where(eq(backupFile.id, row.id));
-    await hapusDumpLama(deps);
+    if (opts.retensi !== false) await hapusDumpLama(deps);
     // Berkas baru ikut disalin setelah backup database.
     await deps.boss.send(QUEUES.filesSync, {}).catch(() => {});
     return { ...row, status: "berhasil" as const, ukuran, b2Key };

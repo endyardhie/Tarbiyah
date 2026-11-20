@@ -23,7 +23,15 @@ export function crudRoutes<S extends z.ZodType>(
     entitas: string;
     list?: (c: Context<AppEnv>) => Promise<unknown>;
     /** Validasi tambahan di dalam transaksi sebelum menulis. */
-    check?: (tx: Tx, data: z.output<S>, id: string | null) => Promise<void>;
+    /** `before` = baris lama (ubah), agar aturan seperti "arsip baca-saja" juga melihat data lama. */
+    check?: (
+      tx: Tx,
+      data: z.output<S>,
+      id: string | null,
+      before?: Record<string, unknown>,
+    ) => Promise<void>;
+    /** Validasi sebelum hapus (baris lama). */
+    checkDelete?: (tx: Tx, before: Record<string, unknown>) => Promise<void>;
     canDelete?: boolean;
   },
 ) {
@@ -66,7 +74,7 @@ export function crudRoutes<S extends z.ZodType>(
           .from(table as PgTable)
           .where(eq(table.id, id));
         if (!before) throw fail(404, "Data tidak ditemukan");
-        await opts.check?.(tx, data, id);
+        await opts.check?.(tx, data, id, before as Record<string, unknown>);
         const [row] = await tx
           .update(table)
           .set(data as never)
@@ -89,6 +97,12 @@ export function crudRoutes<S extends z.ZodType>(
     app.delete("/:id", read, guard, async (c) => {
       const id = paramId(c);
       await db.transaction(async (tx) => {
+        const [lama] = await tx
+          .select()
+          .from(table as PgTable)
+          .where(eq(table.id, id));
+        if (!lama) throw fail(404, "Data tidak ditemukan");
+        await opts.checkDelete?.(tx, lama as Record<string, unknown>);
         const [before] = await tx.delete(table).where(eq(table.id, id)).returning();
         if (!before) throw fail(404, "Data tidak ditemukan");
         await audit(tx, {

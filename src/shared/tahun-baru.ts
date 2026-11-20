@@ -50,6 +50,8 @@ export type UsulanTahunBaru = {
     tahunAjaran: { nama: string; mulai: string; selesai: string };
     semester: { nomor: number; mulai: string; selesai: string }[];
   };
+  /** Jumlah potongan/beasiswa tahun ini (disalin untuk santri yang tetap belajar). */
+  potongan: number;
   kelas: {
     id: string;
     nama: string;

@@ -22,6 +22,10 @@ const label = (k?: Kelas) => (k ? `${k.nama} · ${k.unitKode} ${k.lokasiNama}` :
 function Wizard({ data }: { data: UsulanTahunBaru }) {
   const navigate = useNavigate();
   const [langkah, setLangkah] = useState(1);
+  const ke = (n: number) => {
+    setLangkah(n);
+    window.scrollTo({ top: 0 });
+  };
   const [ta, setTa] = useState(data.usulan.tahunAjaran);
   const [sem, setSem] = useState(data.usulan.semester);
   const [putusan, setPutusan] = useState(
@@ -165,7 +169,7 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
               </Field>
             </div>
           ))}
-          <Button onClick={() => setLangkah(2)} disabled={!ta.nama || !ta.mulai || !ta.selesai}>
+          <Button onClick={() => ke(2)} disabled={!ta.nama || !ta.mulai || !ta.selesai}>
             Lanjut
           </Button>
         </Card>
@@ -244,10 +248,10 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
             </EmptyState>
           )}
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setLangkah(1)}>
+            <Button variant="secondary" onClick={() => ke(1)}>
               Kembali
             </Button>
-            <Button onClick={() => setLangkah(3)} disabled={kurang > 0}>
+            <Button onClick={() => ke(3)} disabled={kurang > 0}>
               {kurang > 0 ? `${kurang} santri belum punya kelas tujuan` : "Lihat pratinjau"}
             </Button>
           </div>
@@ -279,13 +283,15 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
             </ul>
           </div>
           <p className="rounded-2xl bg-warn-soft px-4 py-3 text-sm font-medium text-warn">
+            {data.potongan > 0 &&
+              `Potongan/beasiswa santri yang tetap belajar ikut disalin (${data.potongan} data tahun ini). `}
             Setelah dijalankan, tahun {ta.nama} langsung aktif dan tahun {data.taLama.nama} hanya
             bisa dibaca. Santri pindah/lulus tidak lagi ditagih. Pengajaran guru diatur ulang di
             Data Sekolah › Pengajaran.
           </p>
           <ErrorAlert>{error}</ErrorAlert>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setLangkah(2)}>
+            <Button variant="secondary" onClick={() => ke(2)}>
               Kembali
             </Button>
             <Button onClick={() => setKonfirmasi(true)}>Jalankan</Button>

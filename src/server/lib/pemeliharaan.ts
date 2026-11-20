@@ -1,6 +1,8 @@
 import type { StatusPemeliharaan } from "../../shared/backup";
 
 // Satu proses/container: status mode pemeliharaan cukup disimpan di memori.
+// Detail teknis (stderr pg_restore, dll.) hanya untuk admin, tidak ikut status publik.
+let detail: string | null = null;
 const state: StatusPemeliharaan = {
   aktif: false,
   tahap: null,
@@ -12,8 +14,10 @@ const state: StatusPemeliharaan = {
 
 export const pemeliharaan = {
   status: (): StatusPemeliharaan => ({ ...state }),
+  detail: () => detail,
   aktif: () => state.aktif,
   mulai(tahap: string) {
+    detail = null;
     Object.assign(state, {
       aktif: true,
       tahap,
@@ -26,7 +30,8 @@ export const pemeliharaan = {
   tahap(tahap: string) {
     state.tahap = tahap;
   },
-  selesai(gagal: boolean, pesan: string) {
+  selesai(gagal: boolean, pesan: string, rincian: string | null = null) {
+    detail = rincian;
     Object.assign(state, {
       aktif: false,
       tahap: null,
@@ -34,6 +39,11 @@ export const pemeliharaan = {
       gagal,
       pesan,
     });
+  },
+  /** Restore gagal total: aplikasi tetap terkunci sampai dipulihkan manual oleh pengelola. */
+  macet(pesan: string, rincian: string) {
+    detail = rincian;
+    Object.assign(state, { aktif: true, tahap: pesan, gagal: true, pesan });
   },
   /** Worker latar menunggu sampai restore selesai (job tidak gagal, hanya tertunda). */
   async tunggu() {

@@ -29,6 +29,8 @@ export type AppDeps = {
   storage: Storage;
   /** Pembuat klien B2; tes memakai B2 tiruan di memori. */
   makeB2?: (cfg: B2Config) => B2;
+  /** Jeda/lanjutkan worker pg-boss selama restore. */
+  jobs?: { jeda(): Promise<void>; lanjut(): Promise<void> };
   /** Dipanggil setelah restore (mis. jadwal cron mengikuti zona waktu dari backup). */
   setelahRestore?: () => Promise<void>;
   /** Jam sekarang; bisa diganti di tes (mis. tepat tengah malam WIT). */

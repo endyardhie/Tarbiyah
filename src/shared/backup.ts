@@ -38,4 +38,6 @@ export type StatusPemeliharaan = {
   selesaiAt: string | null;
   gagal: boolean;
   pesan: string | null;
+  /** Rincian teknis kegagalan (hanya untuk admin). */
+  detail?: string | null;
 };

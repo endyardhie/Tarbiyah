@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { LANJUT, type tahunBaruSchema, type UsulanTahunBaru } from "../../shared/tahun-baru";
 import type { Db } from "../db/client";
@@ -6,6 +6,7 @@ import {
   kelas,
   lokasi,
   pendaftaran,
+  potongan,
   santri,
   semester,
   tahunAjaran,
@@ -15,6 +16,14 @@ import {
 import { audit } from "../lib/audit";
 import { fail } from "../lib/context";
 import { activeTahunAjaran } from "./sekolah";
+
+/**
+ * Kelas yang disalin: kelas aktif, ditambah kelas nonaktif yang masih berisi santri aktif
+ * (kalau tidak, santrinya tidak tampil di wizard dan diam-diam dianggap lulus).
+ */
+const kelasDipakai = sql`(${kelas.aktif} or exists (select 1 from pendaftaran pd
+  join santri s on s.id = pd.santri_id
+  where pd.kelas_id = ${kelas.id} and pd.status = 'aktif' and s.status = 'aktif'))`;
 
 /** "2026-07-13" → "2027-07-13" (29 Feb → 28 Feb). */
 const tambahTahun = (t: string) => {
@@ -46,7 +55,7 @@ export async function usulanTahunBaru(db: Db): Promise<UsulanTahunBaru> {
     .from(kelas)
     .innerJoin(units, eq(units.id, kelas.unitId))
     .innerJoin(lokasi, eq(lokasi.id, kelas.lokasiId))
-    .where(and(eq(kelas.tahunAjaranId, ta.id), eq(kelas.aktif, true)))
+    .where(and(eq(kelas.tahunAjaranId, ta.id), kelasDipakai))
     .orderBy(asc(units.urutan), asc(lokasi.nama), asc(kelas.tingkat), asc(kelas.nama));
   const siswa = await db
     .select({
@@ -72,6 +81,10 @@ export async function usulanTahunBaru(db: Db): Promise<UsulanTahunBaru> {
     );
     return atas.find((x) => x.kelompok === k.kelompok) ?? atas[0] ?? null;
   };
+  const [{ n: jumlahPotongan } = { n: 0 }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(potongan)
+    .where(eq(potongan.tahunAjaranId, ta.id));
   const [y] = ta.nama.split("/").map(Number) as [number];
   return {
     taLama: { id: ta.id, nama: ta.nama, mulai: ta.mulai, selesai: ta.selesai },
@@ -87,6 +100,7 @@ export async function usulanTahunBaru(db: Db): Promise<UsulanTahunBaru> {
         selesai: tambahTahun(s.selesai),
       })),
     },
+    potongan: jumlahPotongan,
     kelas: kelasLama.map(({ unitId: _, lokasiId: __, ...k }) => k),
     santri: siswa.map((s) => {
       const asal = kelasLama.find((k) => k.id === s.kelasId);
@@ -135,6 +149,16 @@ export async function jalankanTahunBaru(
       throw fail(400, "Ada santri yang bukan santri aktif tahun ini. Muat ulang wizard.");
     }
 
+    const [bentrok] = await tx
+      .select({ id: tahunAjaran.id })
+      .from(tahunAjaran)
+      .where(eq(tahunAjaran.nama, input.tahunAjaran.nama));
+    if (bentrok) {
+      throw fail(
+        409,
+        `Tahun ajaran ${input.tahunAjaran.nama} sudah ada. Wizard membuat tahun ajarannya sendiri: hapus atau ganti nama tahun yang sudah ada dulu.`,
+      );
+    }
     const [baru] = await tx
       .insert(tahunAjaran)
       .values({ ...input.tahunAjaran, aktif: false })
@@ -148,7 +172,7 @@ export async function jalankanTahunBaru(
     const kelasLama = await tx
       .select()
       .from(kelas)
-      .where(and(eq(kelas.tahunAjaranId, lama.id), eq(kelas.aktif, true)));
+      .where(and(eq(kelas.tahunAjaranId, lama.id), kelasDipakai));
     const salin = new Map<string, string>();
     if (kelasLama.length) {
       const rows = await tx
@@ -193,6 +217,25 @@ export async function jalankanTahunBaru(
       }
     }
     if (pendaftaranBaru.length) await tx.insert(pendaftaran).values(pendaftaranBaru);
+    // Potongan/beasiswa ikut ke tahun baru untuk santri yang tetap belajar (bisa diubah bendahara).
+    const lanjutIds = pendaftaranBaru.map((p) => p.santriId);
+    const potonganLama = lanjutIds.length
+      ? await tx
+          .select()
+          .from(potongan)
+          .where(and(eq(potongan.tahunAjaranId, lama.id), inArray(potongan.santriId, lanjutIds)))
+      : [];
+    if (potonganLama.length) {
+      await tx.insert(potongan).values(
+        potonganLama.map((p) => ({
+          santriId: p.santriId,
+          tahunAjaranId: baru.id,
+          jenis: p.jenis,
+          nilai: p.nilai,
+          alasan: p.alasan,
+        })),
+      );
+    }
     // Santri pindah/lulus tidak lagi aktif → tidak ditagih dan tidak muncul di kelas mana pun.
     for (const status of ["pindah", "lulus"] as const) {
       const ids = input.keputusan.filter((k) => k.status === status).map((k) => k.santriId);
@@ -217,9 +260,21 @@ export async function jalankanTahunBaru(
       entitas: "tahun_ajaran",
       entitasId: baru.id,
       sebelum: { tahunAjaran: lama.nama },
-      sesudah: { tahunAjaran: baru.nama, kelas: salin.size, tarif: tarif.length, ...hitung },
+      sesudah: {
+        tahunAjaran: baru.nama,
+        kelas: salin.size,
+        tarif: tarif.length,
+        potongan: potonganLama.length,
+        ...hitung,
+      },
       ip: user.ip,
     });
-    return { tahunAjaran: baru, kelas: salin.size, tarif: tarif.length, keputusan: hitung };
+    return {
+      tahunAjaran: baru,
+      kelas: salin.size,
+      tarif: tarif.length,
+      potongan: potonganLama.length,
+      keputusan: hitung,
+    };
   });
 }

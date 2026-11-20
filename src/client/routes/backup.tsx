@@ -275,6 +275,11 @@ function ProsesRestore({ status, selesai }: { status?: StatusPemeliharaan; seles
               Lanjutkan
             </Button>
           </>
+        ) : status?.aktif && status.gagal ? (
+          <>
+            <p className="text-lg font-bold text-danger">Aplikasi dikunci</p>
+            <p className="text-text2">{status.pesan}</p>
+          </>
         ) : (
           <>
             <LoaderCircle size={48} className="mx-auto animate-spin text-primary" />
@@ -376,6 +381,11 @@ export function BackupPage() {
         >
           {s.pesan}
           {!s.gagal && " Bila Anda diminta masuk lagi, itu karena data sesi ikut dipulihkan."}
+          {s.detail && (
+            <span className="mt-2 block font-mono text-xs break-all whitespace-pre-wrap opacity-80">
+              {s.detail}
+            </span>
+          )}
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">

@@ -6,7 +6,14 @@ import type { B2, B2Config } from "../lib/b2";
 import { safeError } from "../lib/log";
 import { pemeliharaan } from "../lib/pemeliharaan";
 import type { Storage } from "../lib/storage";
-import { backupTerjadwal, eksklusif, jalankanBackup, sinkronBerkas } from "../services/backup";
+import {
+  backupTerjadwal,
+  eksklusif,
+  jalankanBackup,
+  notifyAdmin,
+  PESAN_SIBUK,
+  sinkronBerkas,
+} from "../services/backup";
 import { tagihanHarian } from "../services/keuangan";
 import { rekonsiliasi } from "../services/pembayaran-online";
 import { sendPush } from "../services/push";
@@ -39,17 +46,19 @@ export async function registerJobs(
   timeZone: string,
   cfg: JobConfig,
 ) {
-  const backupDeps = { db, pool, boss, ...cfg };
-  await boss.createQueue(QUEUES.heartbeat);
-  await boss.createQueue(QUEUES.cleanup);
-  await boss.createQueue(QUEUES.pushSend);
-  await boss.createQueue(QUEUES.waSend);
-  await boss.createQueue(QUEUES.tagihanBuat);
-  await boss.createQueue(QUEUES.rekonsiliasi);
-  await boss.createQueue(QUEUES.backupCek);
-  await boss.createQueue(QUEUES.backupRun);
-  await boss.createQueue(QUEUES.filesSync);
+  for (const q of Object.values(QUEUES)) await boss.createQueue(q);
   await scheduleJobs(boss, timeZone);
+  await registerWorkers(boss, db, pool, cfg);
+}
+
+/** Hentikan semua worker (job yang sedang berjalan dibiarkan selesai). Dipakai restore. */
+export async function jedaWorkers(boss: PgBoss) {
+  for (const q of Object.values(QUEUES)) await boss.offWork(q);
+}
+
+/** Pasang worker semua antrean (saat start dan setelah restore). */
+export async function registerWorkers(boss: PgBoss, db: Db, pool: pg.Pool, cfg: JobConfig) {
+  const backupDeps = { db, pool, boss, ...cfg };
 
   // Selama restore (mode pemeliharaan) job ditunda, bukan digagalkan.
   const siap =
@@ -108,7 +117,17 @@ export async function registerJobs(
     siap(async ([job]) => {
       await eksklusif(() =>
         jalankanBackup(backupDeps, { jenis: "manual", userId: job?.data.userId ?? null }),
-      ).catch((e) => console.error(`[backup] ${safeError(e)}`));
+      ).catch(async (e) => {
+        console.error(`[backup] ${safeError(e)}`);
+        // Kegagalan backup sudah diberitahukan oleh jalankanBackup; yang belum: dilewati karena sibuk.
+        if (e instanceof Error && e.message === PESAN_SIBUK) {
+          await notifyAdmin(
+            backupDeps,
+            "Backup manual tidak dijalankan",
+            "Backup atau restore lain sedang berjalan. Coba lagi setelah selesai.",
+          ).catch(() => {});
+        }
+      });
     }),
   );
   await boss.work(

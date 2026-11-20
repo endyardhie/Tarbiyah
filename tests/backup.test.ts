@@ -12,6 +12,7 @@ import {
   dumpKey,
   eksklusif,
   jalankanBackup,
+  pgRestore,
   sinkronBerkas,
 } from "../src/server/services/backup";
 import { ambilDariB2, cekRestore, pulihkan } from "../src/server/services/restore";
@@ -186,6 +187,57 @@ describe.skipIf(!adaPgDump && !process.env.CI)("backup & restore", () => {
     pemeliharaan.selesai(false, "tes");
   });
 
+  it("restore dump tertua tetap bisa walau server hanya menyimpan 1 dump", async () => {
+    await t.req("PUT", "/api/backup/pengaturan", {
+      cookie: admin,
+      body: { ...PENGATURAN_B2, simpanDiServer: 1, appKey: "" },
+    });
+    const x = await eksklusif(() => jalankanBackup(deps, { jenis: "manual" }));
+    const urutan: string[] = [];
+    await pulihkan(
+      {
+        ...deps,
+        jobs: {
+          jeda: async () => void urutan.push(`jeda:${pemeliharaan.aktif()}`),
+          lanjut: async () => void urutan.push(`lanjut:${pemeliharaan.aktif()}`),
+        },
+      },
+      x.id,
+    );
+    expect(pemeliharaan.status().gagal).toBe(false);
+    // Worker dijeda sebelum mode pemeliharaan dan dilanjutkan sesudahnya.
+    expect(urutan).toEqual(["jeda:false", "lanjut:false"]);
+    await t.req("PUT", "/api/backup/pengaturan", {
+      cookie: admin,
+      body: { ...PENGATURAN_B2, appKey: "" },
+    });
+  });
+
+  it("pg_restore gagal → kondisi sebelumnya kembali; rincian error hanya untuk admin", async () => {
+    const x = await eksklusif(() => jalankanBackup(deps, { jenis: "manual" }));
+    await t.db.insert(lokasi).values({ nama: "SESUDAH" });
+    let panggil = 0;
+    await expect(
+      pulihkan(
+        {
+          ...deps,
+          restoreDump: async (storage, key, url) => {
+            if (panggil++ === 0) throw new Error("pg_restore gagal: rahasia-internal db=x");
+            return pgRestore(storage, key, url);
+          },
+        },
+        x.id,
+      ),
+    ).rejects.toThrow(/rahasia-internal/);
+    const lok = (await t.db.select().from(lokasi)).map((l) => l.nama);
+    expect(lok).toContain("SESUDAH"); // data terbaru kembali dari backup pra-restore
+    const publik = await t.req("GET", "/api/backup/status");
+    expect(publik.body).toMatchObject({ aktif: false, gagal: true, detail: null });
+    expect(JSON.stringify(publik.body)).not.toContain("rahasia-internal");
+    const untukAdmin = await t.req("GET", "/api/backup/status", { cookie: admin });
+    expect(untukAdmin.body.detail).toContain("rahasia-internal");
+  });
+
   it("server baru: database & folder data kosong dipulihkan dari B2", async () => {
     const d2 = await createTestDb();
     const dir = mkdtempSync(join(tmpdir(), "tarbiyah-baru-"));
@@ -214,5 +266,31 @@ describe.skipIf(!adaPgDump && !process.env.CI)("backup & restore", () => {
       await d2.drop();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("restore dan pemulihan cadangan sama-sama gagal → aplikasi tetap terkunci", async () => {
+    const x = await eksklusif(() => jalankanBackup(deps, { jenis: "manual" }));
+    const urutan: string[] = [];
+    await expect(
+      pulihkan(
+        {
+          ...deps,
+          jobs: {
+            jeda: async () => void urutan.push("jeda"),
+            lanjut: async () => void urutan.push("lanjut"),
+          },
+          restoreDump: async () => {
+            throw new Error("rusak");
+          },
+        },
+        x.id,
+      ),
+    ).rejects.toThrow("rusak");
+    const st = pemeliharaan.status();
+    expect(st).toMatchObject({ aktif: true, gagal: true });
+    expect(st.pesan).toContain("Pulihkan manual");
+    expect(urutan).toEqual(["jeda"]); // worker tidak dilanjutkan di database kosong
+    expect((await t.req("GET", "/api/lokasi", { cookie: admin })).status).toBe(503);
+    pemeliharaan.selesai(false, "reset tes");
   });
 });

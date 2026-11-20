@@ -3,7 +3,7 @@ import { createApp } from "./app";
 import { createDb, runMigrations } from "./db/client";
 import { configWarnings, parseEnv } from "./env";
 import { createBoss } from "./jobs/boss";
-import { registerJobs, scheduleJobs } from "./jobs/schedules";
+import { jedaWorkers, registerJobs, registerWorkers, scheduleJobs } from "./jobs/schedules";
 import { createStorage } from "./lib/storage";
 import { createTurnstileVerifier } from "./lib/turnstile";
 import { sinkronDaftarBackup } from "./services/backup";
@@ -31,13 +31,14 @@ await sinkronDaftarBackup({ db, storage });
 
 const boss = createBoss(env.DATABASE_URL);
 await boss.start();
-await registerJobs(boss, db, pool, await schoolTimeZone(db), {
+const jobConfig = {
   encryptionKey: env.APP_ENCRYPTION_KEY,
   appUrl: env.APP_URL,
   storage,
   databaseUrl: env.DATABASE_URL,
   version: env.APP_VERSION,
-});
+};
+await registerJobs(boss, db, pool, await schoolTimeZone(db), jobConfig);
 
 const app = createApp({
   db,
@@ -54,6 +55,10 @@ const app = createApp({
   verifyTurnstile: createTurnstileVerifier(env.TURNSTILE_SECRET_KEY),
   storage,
   setelahRestore: async () => scheduleJobs(boss, await schoolTimeZone(db)),
+  jobs: {
+    jeda: () => jedaWorkers(boss),
+    lanjut: () => registerWorkers(boss, db, pool, jobConfig),
+  },
   staticDir: "dist/client",
 });
 

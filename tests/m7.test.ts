@@ -10,7 +10,7 @@ let admin: string;
 let guru: string;
 let wali: string;
 const id = {} as Record<
-  "lok" | "unit" | "ta" | "k1" | "k2" | "a" | "b" | "c" | "ajar" | "guru" | "wali",
+  "lok" | "unit" | "ta" | "k1" | "k2" | "k3" | "a" | "b" | "c" | "d" | "ajar" | "guru" | "wali",
   string
 >;
 
@@ -64,6 +64,10 @@ beforeAll(async () => {
   id.a = (await post("/api/santri", { nis: "A1", nama: "Ahmad", kelasId: id.k1 })).id;
   id.c = (await post("/api/santri", { nis: "C1", nama: "Chairul", kelasId: id.k1 })).id;
   id.b = (await post("/api/santri", { nis: "B1", nama: "Bilal", kelasId: id.k2 })).id;
+  // Kelas nonaktif yang masih berisi santri aktif: santrinya wajib tetap tampil di wizard.
+  id.k3 = await kelas("Kelas Lama", 5);
+  id.d = (await post("/api/santri", { nis: "D1", nama: "Daud", kelasId: id.k3 })).id;
+  await t.db.execute(sql`update kelas set aktif = false where id = ${id.k3}`);
   const mapel = (await post("/api/mapel", { nama: "Fiqih" })).id;
   id.ajar = (await post("/api/pengajaran", { kelasId: id.k1, mapelId: mapel, guruId: id.guru })).id;
   await t.req("PUT", "/api/keuangan/tarif", {
@@ -136,6 +140,8 @@ describe("wizard tahun ajaran baru", () => {
     const by = Object.fromEntries(u.santri.map((s: { nis: string }) => [s.nis, s]));
     expect(by.A1).toMatchObject({ status: "naik", kelasTujuanId: id.k2 });
     expect(by.B1).toMatchObject({ status: "lulus", kelasTujuanId: null });
+    expect(by.D1).toBeTruthy();
+    expect(u.kelas.map((k: { id: string }) => k.id)).toContain(id.k3);
   });
 
   it("validasi: semua santri wajib diputuskan; tahun baru setelah tahun lama", async () => {
@@ -158,22 +164,45 @@ describe("wizard tahun ajaran baru", () => {
     expect(aktif?.id).toBe(id.ta); // tidak ada yang berubah
   });
 
-  it("naik/tinggal/lulus dalam satu transaksi; kelas & tarif disalin; tahun lama baca-saja", async () => {
+  it("naik/tinggal/lulus dalam satu transaksi; kelas, tarif, potongan disalin; tahun lama baca-saja", async () => {
+    await t.req("PUT", "/api/keuangan/potongan", {
+      cookie: admin,
+      body: { santriId: id.a, jenis: "persen", nilai: 50, alasan: "Yatim" },
+    });
+    await t.req("PUT", "/api/keuangan/potongan", {
+      cookie: admin,
+      body: { santriId: id.b, jenis: "persen", nilai: 25, alasan: "Anak guru" },
+    });
     const u = (await t.req("GET", "/api/tahun-baru", { cookie: admin })).body;
-    const hasil = await post("/api/tahun-baru", {
+    expect(u.potongan).toBe(2);
+    const body = {
       tahunAjaran: u.usulan.tahunAjaran,
       semester: u.usulan.semester,
       keputusan: [
         { santriId: id.a, status: "naik", kelasId: id.k2 },
         { santriId: id.c, status: "tinggal", kelasId: id.k1 },
         { santriId: id.b, status: "lulus" },
+        { santriId: id.d, status: "pindah" },
       ],
-    });
+    };
+    // Nama tahun ajaran yang sudah ada → pesan jelas, tidak ada yang berubah.
+    await t.db
+      .insert(tahunAjaran)
+      .values({ nama: "2027/2028", mulai: "2027-07-13", selesai: "2028-06-30" });
+    const bentrok = await t.req("POST", "/api/tahun-baru", { cookie: admin, body });
+    expect(bentrok.status).toBe(409);
+    expect(bentrok.body.error).toContain("sudah ada");
+    await t.db.delete(tahunAjaran).where(eq(tahunAjaran.nama, "2027/2028"));
+
+    const hasil = await post("/api/tahun-baru", body);
     expect(hasil).toMatchObject({
-      kelas: 2,
+      kelas: 3,
       tarif: 1,
-      keputusan: { naik: 1, tinggal: 1, lulus: 1 },
+      potongan: 1, // hanya santri yang tetap belajar (A); B lulus
+      keputusan: { naik: 1, tinggal: 1, lulus: 1, pindah: 1 },
     });
+    const [d] = await t.db.select().from(santri).where(eq(santri.id, id.d));
+    expect(d?.status).toBe("pindah");
     const baru = hasil.tahunAjaran.id;
     const [aktif] = await t.db.select().from(tahunAjaran).where(eq(tahunAjaran.aktif, true));
     expect(aktif?.id).toBe(baru);
@@ -188,12 +217,13 @@ describe("wizard tahun ajaran baru", () => {
       { nis: "C1", kelas: "Kelas 1", tingkat: 1 },
     ]);
     const lama = await t.db.select().from(pendaftaran).where(eq(pendaftaran.tahunAjaranId, id.ta));
-    expect(lama.map((p) => p.status).sort()).toEqual(["lulus", "naik", "tinggal"]);
+    expect(lama.map((p) => p.status).sort()).toEqual(["lulus", "naik", "pindah", "tinggal"]);
     const [b] = await t.db.select().from(santri).where(eq(santri.id, id.b));
     expect(b?.status).toBe("lulus");
     // Santri lulus tidak ditagih di tahun baru.
     const tg = await buatTagihan(t.db, "2027-08", { simpan: false });
     expect(tg.items.map((i) => i.nis).sort()).toEqual(["A1", "C1"]);
+    expect(tg.items.find((i) => i.nis === "A1")?.total).toBe(75_000); // potongan 50% ikut
 
     // Tahun lama arsip: presensi, tugas, dan kelas baru di tahun itu ditolak.
     const presensi = await t.req("PUT", "/api/presensi", {
@@ -215,6 +245,14 @@ describe("wizard tahun ajaran baru", () => {
       body: { tahunAjaranId: id.ta, unitId: id.unit, lokasiId: id.lok, nama: "Baru", tingkat: 3 },
     });
     expect(kelas.status).toBe(409);
+    expect((await t.req("DELETE", `/api/pengajaran/${id.ajar}`, { cookie: admin })).status).toBe(
+      409,
+    );
+    const jadwal = await t.req("POST", "/api/jadwal", {
+      cookie: admin,
+      body: { pengajaranId: id.ajar, hari: 1, jamMulai: "07:00", jamSelesai: "08:00" },
+    });
+    expect(jadwal.status).toBe(409);
   });
 });
 
