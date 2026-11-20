@@ -15,10 +15,16 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
     method: opts.method ?? (hasBody ? "POST" : "GET"),
     headers: hasBody ? { "content-type": "application/json" } : undefined,
     body: hasBody ? JSON.stringify(opts.body) : undefined,
+  }).catch(() => {
+    throw new ApiError(0, "Tidak bisa terhubung ke server. Periksa koneksi internet.");
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new ApiError(res.status, data?.error ?? "Tidak bisa terhubung ke server");
+    // Jawaban bukan JSON aplikasi: biasanya ditolak proxy/firewall (mis. WAF Cloudflare).
+    throw new ApiError(
+      res.status,
+      data?.error ?? `Permintaan ditolak sebelum sampai ke aplikasi (HTTP ${res.status}).`,
+    );
   }
   return data as T;
 }
