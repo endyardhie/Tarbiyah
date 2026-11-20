@@ -1,5 +1,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Download, FilePlus2, Printer, Receipt, RotateCcw, Send, Trash2 } from "lucide-react";
+import {
+  Download,
+  FilePlus2,
+  Printer,
+  Receipt,
+  RotateCcw,
+  Send,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { formatRupiah, labelPeriode, METODE_LABEL, type TagihanRow } from "../../shared/keuangan";
 import { Card, EmptyState, PageHeader, TabBar } from "../components/Page";
@@ -113,67 +122,110 @@ function TagihanStaf() {
       .filter((r) => (s ? r.status === s : r.status !== "batal"))
       .reduce((a, r) => a + r.total, 0);
 
+  const [saring, setSaring] = useState(false);
+  const opsiNama = (list: { id: string; nama?: string; kode?: string }[] | undefined, id: string) =>
+    list?.find((x) => x.id === id);
+  const ringkas = [
+    f.status && { belum: "Belum lunas", lunas: "Lunas", batal: "Dibatalkan" }[f.status],
+    f.lokasiId && opsiNama(lokasi.data, f.lokasiId)?.nama,
+    f.unitId && opsiNama(units.data, f.unitId)?.kode,
+    f.kelasId && kelas.data?.find((k) => k.id === f.kelasId)?.nama,
+  ].filter(Boolean) as string[];
+  const aktif = [f.status, f.lokasiId, f.unitId, f.kelasId].filter(Boolean).length;
+  const filterFields = (
+    <>
+      <input
+        type="month"
+        aria-label="Periode"
+        className={select}
+        value={f.periode}
+        onChange={(e) => set("periode")(e.target.value)}
+      />
+      <select
+        aria-label="Status"
+        className={select}
+        value={f.status}
+        onChange={(e) => set("status")(e.target.value)}
+      >
+        <option value="">Semua status</option>
+        <option value="belum">Belum lunas</option>
+        <option value="lunas">Lunas</option>
+        <option value="batal">Dibatalkan</option>
+      </select>
+      <select
+        aria-label="Lokasi"
+        className={select}
+        value={f.lokasiId}
+        onChange={(e) => set("lokasiId")(e.target.value)}
+      >
+        <option value="">Semua lokasi</option>
+        {lokasi.data?.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.nama}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label="Unit"
+        className={select}
+        value={f.unitId}
+        onChange={(e) => set("unitId")(e.target.value)}
+      >
+        <option value="">Semua unit</option>
+        {units.data?.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.kode}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label="Kelas"
+        className={select}
+        value={f.kelasId}
+        onChange={(e) => set("kelasId")(e.target.value)}
+      >
+        <option value="">Semua kelas</option>
+        {kelas.data?.map((k) => (
+          <option key={k.id} value={k.id}>
+            {kelasLabel(k)}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+
   return (
     <div className="space-y-4">
       <Card>
-        <div className="grid gap-2 sm:flex sm:flex-wrap">
+        {/* HP: cari + tombol Filter (lembar bawah). Layar lebar: semua filter berderet. */}
+        <div className="flex gap-2 sm:hidden">
           <input
-            type="month"
-            aria-label="Periode"
-            className={select}
-            value={f.periode}
-            onChange={(e) => set("periode")(e.target.value)}
+            type="search"
+            aria-label="Cari santri"
+            placeholder="Cari santri"
+            title="Cari nama atau NIS"
+            className={`${inputBase} min-w-0 flex-1`}
+            value={f.q}
+            onChange={(e) => set("q")(e.target.value)}
           />
-          <select
-            aria-label="Status"
-            className={select}
-            value={f.status}
-            onChange={(e) => set("status")(e.target.value)}
+          <button
+            type="button"
+            onClick={() => setSaring(true)}
+            className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full border border-border bg-surface-raised px-4 font-semibold"
           >
-            <option value="">Semua status</option>
-            <option value="belum">Belum lunas</option>
-            <option value="lunas">Lunas</option>
-            <option value="batal">Dibatalkan</option>
-          </select>
-          <select
-            aria-label="Lokasi"
-            className={select}
-            value={f.lokasiId}
-            onChange={(e) => set("lokasiId")(e.target.value)}
-          >
-            <option value="">Semua lokasi</option>
-            {lokasi.data?.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.nama}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Unit"
-            className={select}
-            value={f.unitId}
-            onChange={(e) => set("unitId")(e.target.value)}
-          >
-            <option value="">Semua unit</option>
-            {units.data?.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.kode}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Kelas"
-            className={select}
-            value={f.kelasId}
-            onChange={(e) => set("kelasId")(e.target.value)}
-          >
-            <option value="">Semua kelas</option>
-            {kelas.data?.map((k) => (
-              <option key={k.id} value={k.id}>
-                {kelasLabel(k)}
-              </option>
-            ))}
-          </select>
+            <SlidersHorizontal size={18} /> Filter
+            {aktif > 0 && (
+              <span className="grid size-5 place-items-center rounded-full bg-primary text-xs text-on-primary">
+                {aktif}
+              </span>
+            )}
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-text2 sm:hidden">
+          {[labelPeriode(f.periode), ...ringkas].join(" · ")}
+        </p>
+        <div className="hidden gap-2 sm:flex sm:flex-wrap">
+          {filterFields}
           <input
             type="search"
             aria-label="Cari santri"
@@ -265,6 +317,23 @@ function TagihanStaf() {
           </ul>
         </Card>
       )}
+      <Modal open={saring} onOpenChange={setSaring} title="Filter tagihan">
+        <div className="grid gap-2">{filterFields}</div>
+        <div className="mt-4 flex gap-2">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={() =>
+              setF((s) => ({ ...s, status: "", lokasiId: "", unitId: "", kelasId: "" }))
+            }
+          >
+            Reset
+          </Button>
+          <Button className="flex-1" onClick={() => setSaring(false)}>
+            Tampilkan{list.data ? ` ${rows.length}` : ""}
+          </Button>
+        </div>
+      </Modal>
       {buat && <BuatTagihanModal periodeAwal={f.periode} onClose={() => setBuat(false)} />}
       {bayar && <BayarManualModal tagihan={bayar} onClose={() => setBayar(null)} />}
       {batal && <BatalModal tagihan={batal} onClose={() => setBatal(null)} />}
