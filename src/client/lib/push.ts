@@ -55,6 +55,12 @@ export async function enablePush() {
  * di browser ini dilepas, agar push akun sebelumnya tidak muncul untuk pengguna baru).
  */
 export async function disablePush() {
+  // Melepas langganan bisa menggantung di sebagian HP (layanan push tidak menjawab):
+  // jangan pernah menahan keluar/masuk lebih dari 3 detik.
+  await Promise.race([lepasPush().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+}
+
+async function lepasPush() {
   if (!supported()) return;
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();

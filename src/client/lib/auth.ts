@@ -28,11 +28,13 @@ export function useLogout() {
   return useMutation({
     mutationFn: async () => {
       await disablePush();
-      await api("/auth/logout", { method: "POST" });
+      // Sesi di server tetap dicoba dihapus; gagal jaringan tidak boleh menahan pengguna di aplikasi.
+      await api("/auth/logout", { method: "POST" }).catch(() => {});
     },
     onSettled: () => {
       queryClient.clear();
-      queryClient.setQueryData(["me"], null);
+      // Muat ulang penuh ke halaman masuk: menutup menu/dialog dan membuang semua state lama.
+      window.location.replace("/login");
     },
   });
 }

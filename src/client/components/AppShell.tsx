@@ -121,9 +121,10 @@ function MenuSheet({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
           <button
             type="button"
             onClick={() => logout.mutate()}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-semibold text-danger hover:bg-danger-soft"
+            disabled={logout.isPending}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-semibold text-danger hover:bg-danger-soft disabled:opacity-60"
           >
-            <LogOut size={20} /> Keluar
+            <LogOut size={20} /> {logout.isPending ? "Keluar…" : "Keluar"}
           </button>
           <ThemeToggle withLabel />
         </div>
