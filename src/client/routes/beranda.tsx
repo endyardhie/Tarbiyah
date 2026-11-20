@@ -11,6 +11,7 @@ import { isPureWali } from "../lib/nav";
 import { useHariIni } from "../lib/presensi";
 import { usePublicConfig } from "../lib/sekolah";
 import { useRingkasanBackup } from "./backup";
+import { BerandaWali } from "./beranda-wali";
 import { useTagihanAnak } from "./keuangan-wali";
 
 type Health = { ok: boolean; versi: string; waktuSekolah: string; db: boolean; boss: boolean };
@@ -458,6 +459,21 @@ export function BerandaPage() {
   const { data: me } = useMe();
   const config = usePublicConfig();
   const nama = me?.user.namaPanggilan || me?.user.nama;
+  if (isPureWali(me)) {
+    return (
+      <>
+        {config.data?.dataContoh && (
+          <p
+            role="status"
+            className="mb-3 rounded-2xl bg-warn-soft px-4 py-2 text-xs font-medium text-warn"
+          >
+            DATA CONTOH untuk uji coba, bukan data santri sungguhan.
+          </p>
+        )}
+        <BerandaWali nama={nama} />
+      </>
+    );
+  }
   return (
     <>
       <PageHeader

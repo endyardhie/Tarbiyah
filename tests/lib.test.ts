@@ -83,3 +83,16 @@ describe("can()", () => {
     expect(await can(u, "backup.kelola")).toBe(false);
   });
 });
+
+describe("nama di daftar presensi", () => {
+  it("pakai nama panggilan; panggilan kembar dibedakan huruf kata kedua", async () => {
+    const { namaPresensi } = await import("../src/client/lib/presensi");
+    const m = namaPresensi([
+      { pendaftaranId: "1", nama: "Aisyah Hakim", namaPanggilan: "Aisyah" },
+      { pendaftaranId: "2", nama: "Aisyah Rahmawati", namaPanggilan: "Aisyah" },
+      { pendaftaranId: "3", nama: "Muhammad Fikri", namaPanggilan: "Fikri" },
+      { pendaftaranId: "4", nama: "Zaid", namaPanggilan: null },
+    ]);
+    expect([...m.values()]).toEqual(["Aisyah H.", "Aisyah R.", "Fikri", "Zaid"]);
+  });
+});

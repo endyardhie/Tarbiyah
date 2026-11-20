@@ -8,7 +8,7 @@ import { api, errorMessage, queryClient } from "../lib/api";
 import { useMe } from "../lib/auth";
 import { formatTanggal, formatWaktu } from "../lib/format";
 import { isPureWali } from "../lib/nav";
-import { monthOf, STATUS, tglDate, useHariIni } from "../lib/presensi";
+import { monthOf, namaPresensi, STATUS, tglDate, useHariIni } from "../lib/presensi";
 import { useTahunAjaran } from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, inputClass } from "../ui/Field";
@@ -27,7 +27,7 @@ function StatusButtons({
   disabled: boolean;
 }) {
   return (
-    <div className="flex shrink-0 gap-1.5" role="group" aria-label={`Status ${nama}`}>
+    <div className="flex shrink-0 gap-1" role="group" aria-label={`Status ${nama}`}>
       {STATUS.map((s) => {
         const on = value === s.value;
         return (
@@ -126,6 +126,7 @@ function IsiPresensi({
     for (const r of rows) c[r.status]++;
     return c;
   }, [rows]);
+  const namaTampil = useMemo(() => namaPresensi(rows), [rows]);
   const d = q.data;
 
   return (
@@ -242,25 +243,23 @@ function IsiPresensi({
                     Presensi ini hanya bisa dilihat. Koreksi tanggal lampau butuh izin khusus.
                   </ErrorAlert>
                 )}
-                <ul className="space-y-2 pb-28 md:pb-4">
+                <ul className="space-y-1.5 pb-28 md:pb-4">
                   {rows.map((r, i) => (
                     <li
                       key={r.pendaftaranId}
-                      className="rounded-2xl border border-border bg-surface px-3 py-2.5"
+                      className="rounded-2xl border border-border bg-surface py-1 pr-1 pl-4"
                     >
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <span className="w-6 shrink-0 text-right text-sm text-text2 tabular-nums">
-                          {r.noAbsen ?? i + 1}
-                        </span>
-                        <div className="min-w-[4.5rem] flex-1 basis-0">
-                          <p className="truncate font-semibold">{r.namaPanggilan || r.nama}</p>
-                          {r.namaPanggilan && (
-                            <p className="truncate text-xs text-text2">{r.nama}</p>
-                          )}
-                        </div>
+                      {/* Satu baris per santri: nama panggilan + tombol H S I A. */}
+                      <div className="flex items-center gap-2">
+                        <p
+                          className="min-w-0 flex-1 truncate text-[15px] font-semibold"
+                          title={r.nama}
+                        >
+                          {namaTampil.get(r.pendaftaranId)}
+                        </p>
                         <StatusButtons
                           value={r.status}
-                          nama={r.namaPanggilan || r.nama}
+                          nama={r.nama}
                           disabled={!d.bisaUbah}
                           onChange={(status) => set(i, { status })}
                         />
@@ -269,7 +268,7 @@ function IsiPresensi({
                         <input
                           aria-label={`Keterangan ${r.namaPanggilan || r.nama}`}
                           placeholder="Keterangan (opsional)"
-                          className={`${inputClass} mt-2 min-h-11`}
+                          className={`${inputClass} mt-1 mb-1 min-h-11`}
                           maxLength={200}
                           disabled={!d.bisaUbah}
                           value={r.keterangan ?? ""}

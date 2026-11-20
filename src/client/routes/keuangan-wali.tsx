@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock, QrCode, Receipt } from "lucide-react";
+import { Check, CheckCircle2, Clock, QrCode, Receipt } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { formatRupiah, labelPeriode, METODE_LABEL, type TagihanRow } from "../../shared/keuangan";
@@ -26,6 +26,15 @@ export const useTagihanAnak = () =>
   useQuery({ queryKey: ["keuangan", "anak"], queryFn: () => api<DataAnak>("/keuangan/anak") });
 
 const tglDate = (t: string) => new Date(`${t}T00:00:00Z`);
+/** "2026-12-10" → "10 Desember 2026" */
+// Tahun sudah ada di judul periode; cukup "10 Nov" agar muat di layar 320px.
+const tglBulan = (t: string) =>
+  new Date(`${t}T00:00:00Z`).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+const tglPendek = (t: string) => (t ? formatTanggal(tglDate(t), "UTC").replace(/^\w+, /, "") : "");
 
 export function StatusTagihan({ status }: { status: TagihanRow["status"] }) {
   const cls = {
@@ -45,6 +54,7 @@ export function TagihanWali() {
   const data = useTagihanAnak();
   const [pilih, setPilih] = useState<Set<string>>(new Set());
   const [intentId, setIntentId] = useState<string | null>(null);
+  const [anakId, setAnakId] = useState("");
   const [error, setError] = useState("");
   const semua = useMemo(() => data.data?.anak.flatMap((a) => a.tagihan) ?? [], [data.data]);
   const total = semua.filter((t) => pilih.has(t.id)).reduce((a, t) => a + t.total, 0);
@@ -70,6 +80,13 @@ export function TagihanWali() {
       </EmptyState>
     );
   }
+  const a = anak.find((x) => x.id === anakId) ?? anak[0];
+  if (!a) return null;
+  const belum = a.tagihan
+    .filter((t) => t.status === "belum")
+    .sort((x, y) => x.periode.localeCompare(y.periode));
+  const lunas = a.tagihan.filter((t) => t.status === "lunas").slice(0, 6);
+  const totalBelum = belum.reduce((n, t) => n + t.total, 0);
   const toggle = (id: string) =>
     setPilih((s) => {
       const n = new Set(s);
@@ -95,69 +112,100 @@ export function TagihanWali() {
           </Button>
         </Card>
       )}
-      {anak.map((a) => {
-        const belum = a.tagihan.filter((t) => t.status === "belum");
-        const lunas = a.tagihan.filter((t) => t.status === "lunas").slice(0, 6);
-        return (
-          <Card key={a.id}>
-            <h2 className="text-lg font-semibold">{a.nama}</h2>
-            <p className="mb-3 text-sm text-text2">NIS {a.nis}</p>
-            {belum.length === 0 ? (
-              <p className="flex items-center gap-2 rounded-2xl bg-soft px-4 py-3 font-medium text-on-soft">
-                <CheckCircle2 size={20} /> Semua tagihan sudah lunas.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {belum.map((t) => (
-                  <li key={t.id}>
-                    <label className="flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border border-border bg-surface-raised px-4 py-2 has-[:checked]:border-primary has-[:checked]:bg-soft has-[:disabled]:cursor-default">
-                      <input
-                        type="checkbox"
-                        className="size-5 shrink-0 accent-[var(--primary)]"
-                        checked={pilih.has(t.id)}
-                        disabled={!online}
-                        onChange={() => toggle(t.id)}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-semibold">SPP {labelPeriode(t.periode)}</span>
-                        <span className="block text-sm text-text2">
-                          Jatuh tempo{" "}
-                          {formatTanggal(tglDate(t.jatuhTempo), "UTC").replace(/^\w+, /, "")}
-                          {t.potongan > 0 && ` · potongan ${formatRupiah(t.potongan)}`}
-                        </span>
-                      </span>
-                      <span className="font-bold tabular-nums">{formatRupiah(t.total)}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {lunas.length > 0 && (
-              <details className="mt-3">
-                <summary className="min-h-11 cursor-pointer content-center font-semibold text-text2">
-                  Riwayat lunas
-                </summary>
-                <ul className="mt-1 divide-y divide-border">
-                  {lunas.map((t) => (
-                    <li key={t.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+      {anak.length > 1 && (
+        <div className="flex justify-end">
+          <select
+            aria-label="Pilih anak"
+            className="min-h-11 rounded-full border border-border bg-surface px-4 text-sm font-semibold"
+            value={a.id}
+            onChange={(e) => setAnakId(e.target.value)}
+          >
+            {anak.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {belum.length > 0 ? (
+        <section className="rounded-card bg-primary p-5 text-on-primary shadow-soft dark:bg-soft dark:text-on-soft">
+          <p className="text-sm opacity-85">Total belum lunas · {a.nama}</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{formatRupiah(totalBelum)}</p>
+          <p className="mt-1 text-sm opacity-85">
+            {belum.length} bulan · jatuh tempo terdekat {tglPendek(belum[0]?.jatuhTempo ?? "")}
+          </p>
+        </section>
+      ) : (
+        <section className="flex items-center gap-3 rounded-card bg-soft p-5 text-on-soft">
+          <CheckCircle2 size={28} className="shrink-0" />
+          <div>
+            <p className="font-bold">Semua tagihan sudah lunas</p>
+            <p className="text-sm opacity-85">{a.nama} · terima kasih.</p>
+          </div>
+        </section>
+      )}
+      {belum.length > 0 && (
+        <section>
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wide text-text2 uppercase">
+            {online ? "Pilih bulan yang dibayar" : "Belum lunas"}
+          </h2>
+          <ul className="space-y-2">
+            {belum.map((t) => (
+              <li key={t.id}>
+                <label className="flex min-h-16 cursor-pointer items-center gap-3 rounded-[20px] border border-border bg-surface px-4 py-3 transition-colors has-[:checked]:border-primary has-[:checked]:bg-soft has-[:disabled]:cursor-default">
+                  <input
+                    type="checkbox"
+                    className="size-[22px] shrink-0 rounded-md accent-[var(--primary)]"
+                    checked={pilih.has(t.id)}
+                    disabled={!online}
+                    onChange={() => toggle(t.id)}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold">SPP {labelPeriode(t.periode)}</span>
+                    <span className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm text-text2">
                       <span>
-                        SPP {labelPeriode(t.periode)}
-                        {t.pembayaran && (
-                          <span className="block text-text2">
-                            {METODE_LABEL[t.pembayaran.metode]} ·{" "}
-                            {formatWaktu(t.pembayaran.dibayarAt)}
-                          </span>
-                        )}
+                        Jatuh tempo {tglBulan(t.jatuhTempo)}
+                        {t.potongan > 0 && ` · potongan ${formatRupiah(t.potongan)}`}
                       </span>
-                      <span className="font-semibold tabular-nums">{formatRupiah(t.total)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </Card>
-        );
-      })}
+                      <span className="ml-auto text-base font-bold whitespace-nowrap text-text tabular-nums">
+                        {formatRupiah(t.total)}
+                      </span>
+                    </span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {lunas.length > 0 && (
+        <section>
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wide text-text2 uppercase">
+            Riwayat
+          </h2>
+          <ul className="divide-y divide-border rounded-[20px] border border-border bg-surface px-4">
+            {lunas.map((t) => (
+              <li key={t.id} className="flex items-center gap-3 py-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-soft text-on-soft">
+                  <Check size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{labelPeriode(t.periode)}</span>
+                  <span className="block text-sm text-text2">
+                    {t.pembayaran
+                      ? `${METODE_LABEL[t.pembayaran.metode]} · ${formatWaktu(t.pembayaran.dibayarAt)}`
+                      : formatRupiah(t.total)}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-soft px-3 py-1 text-xs font-bold text-on-soft">
+                  Lunas
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <ErrorAlert>{error}</ErrorAlert>
       {pilih.size > 0 && (
         <div className="fixed inset-x-4 bottom-[calc(96px+env(safe-area-inset-bottom))] z-30 md:sticky md:inset-x-auto md:bottom-6 md:flex md:justify-end">
