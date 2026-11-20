@@ -43,7 +43,7 @@ function useSettingForm<V, B>(path: string, toBody: (v: V) => B) {
   const [error, setError] = useState("");
   const [ok, setOk] = useState(false);
   const save = useMutation({
-    mutationFn: (v: V) => api(path, { method: "PUT", body: toBody(v) }),
+    mutationFn: (v: V) => api(`/pengaturan/${path}`, { method: "PUT", body: toBody(v) }),
     onSuccess: () => {
       setOk(true);
       queryClient.invalidateQueries({ queryKey: ["pengaturan", path] });
