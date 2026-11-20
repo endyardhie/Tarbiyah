@@ -12,8 +12,9 @@ import {
 } from "../../shared/keuangan";
 import { type Db, type Tx, transactionWithClient } from "../db/client";
 import { paymentIntent, paymentIntentItem, pembayaran, tagihan } from "../db/schema";
+import { schoolToday } from "../lib/tanggal";
 import type { PaymentState } from "../payment/types";
-import { getIdentitas, readSetting } from "./pengaturan";
+import { getIdentitas, readSetting, schoolTimeZone } from "./pengaturan";
 import { notify } from "./push";
 import { queueWa } from "./wa";
 
@@ -157,6 +158,13 @@ export async function buatTagihan(
   return { periode, ditagih, tahunAjaran: ta, jatuhTempo, items, dibuat };
 }
 
+/** Job harian 03.00: tagihan bulan berjalan dibuat hanya pada tanggal 1 (zona waktu sekolah). */
+export async function tagihanHarian(db: Db, now = new Date()) {
+  const today = schoolToday(await schoolTimeZone(db), now);
+  if (!today.endsWith("-01")) return null;
+  return buatTagihan(db, today.slice(0, 7), { simpan: true });
+}
+
 // ---------------------------------------------------------------- pelunasan
 
 export type ItemBayar = { tagihanId: string; jumlah: number; providerRef?: string | null };
@@ -281,11 +289,14 @@ export async function antriBuktiWa(
       pesan.push({ nomor: n.nomor, pesan: teks, rujukanTipe: "pembayaran", rujukanId: first.id });
     }
   }
+  if (!pesan.length) return 0;
   await queueWa(tx, client, boss, pesan);
+  const punyaNomor = new Set(nomor.map((n) => n.santri_id));
+  const terkirim = rows.filter((r) => punyaNomor.has(r.santri_id)).map((r) => r.id);
   await tx
     .update(pembayaran)
     .set({ buktiWaDikirimAt: new Date() })
-    .where(inArray(pembayaran.id, pembayaranIds));
+    .where(inArray(pembayaran.id, terkirim));
   return pesan.length;
 }
 
@@ -320,16 +331,23 @@ export async function applyPaymentState(deps: ApplyDeps, provider: string, state
     if (intent.status === "lunas") return "sudah" as const;
 
     const bendahara = () => usersWithPermission(tx, "keuangan.kelola");
-    if (state.jumlah !== intent.total) {
+    // Nominal yang dibayar harus sama dengan yang ditampilkan di QRIS (termasuk kode unik),
+    // nominal dasar sama dengan total intent, dan transaksi memang milik intent ini.
+    const harus = intent.jumlahBayar ?? intent.total;
+    const cocok =
+      state.externalId === intent.id &&
+      state.jumlah === intent.total &&
+      state.jumlahBayar === harus;
+    if (!cocok) {
       if (intent.status !== "selisih") {
         await tx
           .update(paymentIntent)
-          .set({ status: "selisih", jumlahBayar: state.jumlahBayar })
+          .set({ status: "selisih" })
           .where(eq(paymentIntent.id, intent.id));
         await notify(tx, client, deps.boss, await bendahara(), {
           jenis: "keuangan",
           judul: "Pembayaran QRIS tidak cocok",
-          isi: `Transaksi ${state.providerRef}: diterima ${formatRupiah(state.jumlah)}, seharusnya ${formatRupiah(intent.total)}. Tagihan belum ditandai lunas — periksa manual.`,
+          isi: `Transaksi ${state.providerRef}: diterima ${formatRupiah(state.jumlahBayar)}, seharusnya ${formatRupiah(harus)}. Tagihan belum ditandai lunas — periksa di Keuangan › Laporan › Perlu dicek.`,
           url: "/keuangan",
           pengirimUserId: null,
         });
@@ -353,11 +371,7 @@ export async function applyPaymentState(deps: ApplyDeps, provider: string, state
     });
     await tx
       .update(paymentIntent)
-      .set({
-        status: "lunas",
-        lunasAt: state.dibayarAt ?? new Date(),
-        jumlahBayar: state.jumlahBayar,
-      })
+      .set({ status: "lunas", lunasAt: state.dibayarAt ?? new Date() })
       .where(eq(paymentIntent.id, intent.id));
     if (paid.length) {
       await antriBuktiWa(tx, client, deps.boss, paid);
@@ -374,7 +388,7 @@ export async function applyPaymentState(deps: ApplyDeps, provider: string, state
       await notify(tx, client, deps.boss, await bendahara(), {
         jenis: "keuangan",
         judul: "Pembayaran ganda perlu dicek",
-        isi: `Transaksi QRIS ${state.providerRef} membayar tagihan yang sudah lunas sebelumnya.`,
+        isi: `Transaksi QRIS ${state.providerRef} membayar tagihan yang sudah lunas sebelumnya. Periksa di Keuangan › Laporan › Perlu dicek.`,
         url: "/keuangan",
         pengirimUserId: null,
       });

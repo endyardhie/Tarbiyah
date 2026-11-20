@@ -177,6 +177,8 @@ export type TagihanRow = {
   status: "belum" | "lunas" | "batal";
   alasanBatal: string | null;
   lunasAt: string | null;
+  /** Sedang menunggu pembayaran QRIS wali (belum kedaluwarsa). */
+  menungguQris: boolean;
   pembayaran: {
     id: string;
     metode: keyof typeof METODE_LABEL;

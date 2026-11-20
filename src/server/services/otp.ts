@@ -7,6 +7,7 @@ import { otpCodes, sessions, userPhones, users } from "../db/schema";
 import { audit } from "../lib/audit";
 import { fail } from "../lib/context";
 import { hashPassword } from "../lib/password";
+import { clearFailures } from "../lib/rate-limit";
 import { getIdentitas } from "./pengaturan";
 import { getWaConfig, queueWa } from "./wa";
 
@@ -125,6 +126,8 @@ export async function resetDenganOtp(
       .set({ passwordHash, wajibGantiPassword: false, diubahAt: new Date() })
       .where(eq(users.id, otp.userId));
     await tx.delete(sessions).where(eq(sessions.userId, otp.userId));
+    // Kunci "terlalu banyak percobaan login" untuk nomor ini tidak berlaku lagi.
+    await clearFailures(tx, `login:hp:${p.nomor}`);
     await audit(tx, {
       userId: otp.userId,
       aksi: "password.reset_otp",

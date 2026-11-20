@@ -104,6 +104,10 @@ export const paymentIntent = pgTable(
     qris: text("qris"),
     kedaluwarsaAt: tz("kedaluwarsa_at"),
     lunasAt: tz("lunas_at"),
+    // Transaksi bermasalah (selisih / bayar ganda) yang sudah diperiksa bendahara.
+    dicekAt: tz("dicek_at"),
+    dicekOleh: uuid("dicek_oleh").references(() => users.id),
+    catatanCek: text("catatan_cek"),
     dibuatAt: tz("dibuat_at").notNull().defaultNow(),
   },
   (t) => [index("payment_intent_status_idx").on(t.status)],

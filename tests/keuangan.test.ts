@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { transactionWithClient } from "../src/server/db/client";
 import { notifikasi, otpCodes, pembayaran, tagihan, waOutbox } from "../src/server/db/schema";
 import { nokenSignature } from "../src/server/payment/noken-pay";
+import { tagihanHarian } from "../src/server/services/keuangan";
 import { rekonsiliasi } from "../src/server/services/pembayaran-online";
 import { processWaJob, queueWa } from "../src/server/services/wa";
 import { hitungPotongan, isiTemplate } from "../src/shared/keuangan";
@@ -250,6 +251,15 @@ describe("pembuatan tagihan", () => {
     expect(list.body[0].jatuhTempo).toBe("2026-11-10");
   });
 
+  it("job harian hanya membuat tagihan pada tanggal 1 (zona waktu sekolah)", async () => {
+    // 31 Juli 23.00 WIT → belum tanggal 1; 1 Agustus 09.00 WIT → dibuat.
+    expect(await tagihanHarian(t.db, new Date("2026-07-31T14:00:00Z"))).toBeNull();
+    const hasil = await tagihanHarian(t.db, new Date("2026-08-01T00:00:00Z"));
+    expect(hasil?.periode).toBe("2026-08");
+    expect(hasil?.dibuat).toBe(2);
+    expect((await tagihanHarian(t.db, new Date("2026-08-01T00:00:00Z")))?.dibuat).toBe(0);
+  });
+
   it("wali dan guru tidak bisa membuka daftar tagihan bendahara", async () => {
     expect((await t.req("GET", "/api/keuangan/tagihan", { cookie: wali })).status).toBe(403);
     expect(
@@ -304,6 +314,9 @@ describe("pembayaran manual & bukti WA", () => {
       body: {},
     });
     expect(k2.status).toBe(409);
+    const [pb2] = await t.db.select().from(pembayaran).where(eq(pembayaran.id, r2.pembayaranId));
+    expect(pb2?.buktiWaDikirimAt).toBeNull();
+    expect(kirim.waAktif).toBe(true);
   });
 
   it("batal butuh alasan dan tercatat di audit", async () => {
@@ -462,6 +475,126 @@ describe("pembayaran QRIS noken-pay", () => {
       .where(eq(tagihan.id, mar?.id as string));
     expect(tg?.status).toBe("lunas");
   });
+
+  const tagihanS1 = async (periode: string) => {
+    await post("/api/keuangan/tagihan/buat", { periode }, bendahara);
+    const [x] = await t.db
+      .select()
+      .from(tagihan)
+      .where(sql`${tagihan.santriId} = ${id.s1} and ${tagihan.periode} = ${periode}`);
+    return x?.id as string;
+  };
+  const paidNow = (p: Pay) => ({
+    ...p,
+    status: "paid" as const,
+    paid_at: new Date().toISOString(),
+  });
+
+  it("nominal QRIS atau external_id beda → selisih; Perlu dicek bisa ditandai", async () => {
+    const apr = await tagihanS1("2027-04");
+    const i1 = await post("/api/keuangan/bayar", { tagihanIds: [apr] }, wali);
+    const p4 = payments.get("pay_4") as Pay;
+    // Nominal dasar sama, tetapi yang dibayar kurang dari nominal unik yang ditampilkan.
+    const r1 = await webhook({ ...paidNow(p4), charged_amount: p4.charged_amount - 3 });
+    expect(r1.body.hasil).toBe("selisih");
+
+    const mei = await tagihanS1("2027-05");
+    const i2 = await post("/api/keuangan/bayar", { tagihanIds: [mei] }, wali);
+    const p5 = payments.get("pay_5") as Pay;
+    expect((await webhook({ ...paidNow(p5), external_id: "intent-lain" })).body.hasil).toBe(
+      "selisih",
+    );
+    const st = await t.db.select().from(tagihan).where(sql`${tagihan.id} in (${apr}, ${mei})`);
+    expect(st.every((x) => x.status === "belum")).toBe(true);
+
+    const list = await t.req("GET", "/api/keuangan/perlu-dicek", { cookie: bendahara });
+    const ids = list.body.map((m: { id: string }) => m.id);
+    expect(ids).toEqual(expect.arrayContaining([i1.id, i2.id]));
+    const tanpaCatatan = await t.req("POST", `/api/keuangan/perlu-dicek/${i1.id}/selesai`, {
+      cookie: bendahara,
+      body: { catatan: "" },
+    });
+    expect(tanpaCatatan.status).toBe(400);
+    await post(
+      `/api/keuangan/perlu-dicek/${i1.id}/selesai`,
+      { catatan: "Kurang Rp 3, sudah ditagih" },
+      bendahara,
+    );
+    const after = await t.req("GET", "/api/keuangan/perlu-dicek", { cookie: bendahara });
+    expect(after.body.map((m: { id: string }) => m.id)).not.toContain(i1.id);
+    expect((await t.req("GET", "/api/keuangan/perlu-dicek", { cookie: wali })).status).toBe(403);
+  });
+
+  it("dicatat tunai saat QRIS menunggu → ditandai, lalu QRIS lunas tercatat sebagai bayar ganda", async () => {
+    const jun = await tagihanS1("2027-06");
+    const i = await post("/api/keuangan/bayar", { tagihanIds: [jun] }, wali);
+    const list = await t.req("GET", "/api/keuangan/tagihan?periode=2027-06", { cookie: bendahara });
+    const row = list.body.find((r: { id: string }) => r.id === jun);
+    expect(row.menungguQris).toBe(true);
+    await post(`/api/keuangan/tagihan/${jun}/bayar`, { metode: "tunai" }, bendahara);
+    const r = await webhook(paidNow(payments.get("pay_6") as Pay));
+    expect(r.body.hasil).toBe("lunas");
+    const pb = await t.db.select().from(pembayaran).where(eq(pembayaran.tagihanId, jun));
+    expect(pb).toHaveLength(1); // tetap satu pembayaran (tunai)
+    const cek = await t.req("GET", "/api/keuangan/perlu-dicek", { cookie: bendahara });
+    expect(cek.body.find((m: { id: string }) => m.id === i.id)?.jenis).toBe("ganda");
+  });
+
+  it("QRIS yang lewat batas waktu tidak ditampilkan lagi", async () => {
+    const okt = await tagihanS1("2026-10");
+    const i = await post("/api/keuangan/bayar", { tagihanIds: [okt] }, wali);
+    await t.db.execute(
+      sql`update payment_intent set kedaluwarsa_at = now() - interval '1 minute' where id = ${i.id}`,
+    );
+    const v = await t.req("GET", `/api/keuangan/intent/${i.id}`, { cookie: wali });
+    expect(v.body).toMatchObject({ status: "kedaluwarsa", qris: null });
+  });
+});
+
+describe("laporan & ekspor", () => {
+  it("laporan penerimaan per metode; rentang tanggal divalidasi", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lalu = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const besok = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const lap = await t.req("GET", `/api/keuangan/laporan?dari=${lalu}&sampai=${besok}`, {
+      cookie: bendahara,
+    });
+    expect(lap.status).toBe(200);
+    const m = Object.fromEntries(
+      lap.body.perMetode.map((x: { metode: string; n: number }) => [x.metode, x.n]),
+    );
+    expect(m.tunai).toBe(2);
+    expect(m.transfer).toBe(1);
+    expect(m.gateway).toBeGreaterThanOrEqual(3);
+    expect(lap.body.pembayaran.some((p: { santriNama: string }) => p.santriNama === "Ahmad")).toBe(
+      true,
+    );
+    const terbalik = await t.req("GET", `/api/keuangan/laporan?dari=${today}&sampai=${lalu}`, {
+      cookie: bendahara,
+    });
+    expect(terbalik.status).toBe(400);
+    const panjang = await t.req("GET", "/api/keuangan/laporan?dari=2025-01-01&sampai=2026-12-31", {
+      cookie: bendahara,
+    });
+    expect(panjang.status).toBe(400);
+  });
+
+  it("ekspor CSV sesuai filter, tanpa data pribadi di URL", async () => {
+    const res = await t.app.request(
+      "/api/keuangan/ekspor.csv?periode=2026-11",
+      { headers: { cookie: bendahara } },
+      { incoming: { socket: { remoteAddress: "10.0.0.1" } } },
+    );
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    const buf = Buffer.from(await res.arrayBuffer());
+    expect([...buf.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // BOM agar Excel membaca UTF-8
+    const lines = buf.toString("utf8").slice(1).trim().split("\n");
+    expect(lines[0]?.startsWith("NIS,Nama")).toBe(true);
+    expect(lines).toHaveLength(3); // header + Ahmad + Fatimah
+    expect(lines.some((l) => l.startsWith("K2,Fatimah") && l.includes(",lunas,Transfer,"))).toBe(
+      true,
+    );
+  });
 });
 
 function fakeBoss() {
@@ -502,6 +635,31 @@ describe("WA via GOWA (server tiruan)", () => {
     });
     expect(r.status).toBe(200);
     expect(await processWaJob(deps(), outId)).toBe("terkirim");
+  });
+
+  it("kode OTP disamarkan setelah pesan diproses dan tidak bisa dikirim ulang", async () => {
+    const [outId] = await transactionWithClient(t.pool, (tx, client) =>
+      queueWa(tx, client, fakeBoss(), [
+        {
+          nomor: "6282100000303",
+          pesan: "Kode: 123456\nBerlaku 5 menit",
+          rujukanTipe: "otp",
+          rujukanId: "x",
+        },
+      ]),
+    );
+    expect(await processWaJob(deps(), outId as string)).toBe("terkirim");
+    expect(gowaReq.at(-1)?.body.message).toContain("123456");
+    const [row] = await t.db
+      .select()
+      .from(waOutbox)
+      .where(eq(waOutbox.id, outId as string));
+    expect(row?.pesan).toBe("Kode: ******\nBerlaku 5 menit");
+    const r = await t.req("POST", `/api/keuangan/wa/${outId}/kirim-ulang`, {
+      cookie: bendahara,
+      body: {},
+    });
+    expect(r.status).toBe(404);
   });
 
   it("WA nonaktif → dilewati", async () => {
@@ -554,10 +712,22 @@ describe("lupa password via OTP WA", () => {
     expect((await reset(lama)).status).toBe(400);
     await minta("6282100000200");
     const kode = await kodeTerakhir();
+    // Nomor terkunci karena salah password berkali-kali; reset OTP membuka kuncinya.
+    for (let i = 0; i < 5; i++) await t.login("6282100000200", "salah-salah");
+    expect((await t.login("6282100000200", "passwordBaru1")).status).toBe(429);
     expect((await reset(kode)).status).toBe(200);
     expect((await reset(kode)).status).toBe(400); // sekali pakai
     expect((await t.req("GET", "/api/me", { cookie: wali })).status).toBe(401);
     expect((await t.login("6282100000200", "passwordBaru1")).status).toBe(200);
+  });
+
+  it("maks 10 permintaan per jam per IP", async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await minta(`62899000000${String(i).padStart(2, "0")}`, "10.0.0.50")).status).toBe(
+        200,
+      );
+    }
+    expect((await minta("6289900000099", "10.0.0.50")).status).toBe(429);
   });
 
   it("maks 3 permintaan per jam per nomor", async () => {

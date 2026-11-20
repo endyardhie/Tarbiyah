@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, type SQL, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
 import { z } from "zod";
@@ -51,13 +51,13 @@ import {
 import { buatIntent, cekIntent, intentView } from "../services/pembayaran-online";
 import { schoolTimeZone } from "../services/pengaturan";
 import { activeTahunAjaran } from "../services/sekolah";
-import { resendWa } from "../services/wa";
+import { getWaConfig, resendWa } from "../services/wa";
 
 const tanggal = z.iso.date();
 const STATUS_TAGIHAN = ["belum", "lunas", "batal"] as const;
 
 /** Tagihan menunggu QRIS yang belum kedaluwarsa: tidak boleh dibatalkan. */
-const menungguQris = (tagihanId: string) => sql`exists (
+const menungguQris = (tagihanId: string | SQL) => sql`exists (
   select 1 from payment_intent_item it join payment_intent i on i.id = it.intent_id
   where it.tagihan_id = ${tagihanId} and i.status = 'menunggu'
     and (i.kedaluwarsa_at is null or i.kedaluwarsa_at > now()))`;
@@ -95,8 +95,6 @@ export function keuanganRoutes(deps: AppDeps) {
     if (lokasiId) where.push(sql`k.lokasi_id = ${lokasiId}`);
     if (unitId) where.push(sql`k.unit_id = ${unitId}`);
     if (kelasId) where.push(sql`k.id = ${kelasId}`);
-    const cari = q("q")?.trim();
-    if (cari) where.push(sql`(s.nama ilike ${`%${cari}%`} or s.nis = ${cari})`);
     return sql.join(where, sql` and `);
   }
 
@@ -105,6 +103,7 @@ export function keuanganRoutes(deps: AppDeps) {
       u.kode "unitKode", l.nama "lokasiNama", t.periode, t.nominal::float8 nominal,
       t.potongan::float8 potongan, t.total::float8 total, t.jatuh_tempo::text "jatuhTempo",
       t.status, t.alasan_batal "alasanBatal", t.lunas_at "lunasAt",
+      ${menungguQris(sql`t.id`)} "menungguQris",
       case when pb.id is null then null else json_build_object('id', pb.id, 'metode', pb.metode,
         'dibayarAt', pb.dibayar_at, 'buktiWaDikirimAt', pb.bukti_wa_dikirim_at) end pembayaran
     from tagihan t
@@ -217,7 +216,8 @@ export function keuanganRoutes(deps: AppDeps) {
           antriBuktiWa(tx, client, boss, [id]),
         );
         if (!pesan) throw fail(409, "Wali santri ini belum punya nomor WhatsApp penerima tagihan");
-        return c.json({ pesan });
+        const waAktif = !!(await getWaConfig(db, deps.config.encryptionKey));
+        return c.json({ pesan, waAktif });
       })
       // ------------------------------------------------------------ tarif & potongan
       .get("/tarif", lihat, async (c) => {
@@ -342,6 +342,9 @@ export function keuanganRoutes(deps: AppDeps) {
         const dari = tanggal.safeParse(c.req.query("dari"));
         const sampai = tanggal.safeParse(c.req.query("sampai"));
         if (!dari.success || !sampai.success) throw fail(400, "Rentang tanggal tidak valid");
+        if (dari.data > sampai.data) throw fail(400, "Tanggal awal harus sebelum tanggal akhir");
+        const hari = (Date.parse(sampai.data) - Date.parse(dari.data)) / 86_400_000;
+        if (hari > 366) throw fail(400, "Rentang laporan maksimal satu tahun");
         const tz = await schoolTimeZone(db);
         const hariIni = await today();
         const { rows: pembayaranRows } = await db.execute<{
@@ -476,6 +479,53 @@ export function keuanganRoutes(deps: AppDeps) {
           join santri s on s.id = t.santri_id
           order by pb.dibayar_at desc limit 5`);
         return c.json({ periode, ...rows[0], terbaru });
+      })
+      /** QRIS selisih / bayar ganda yang belum diperiksa bendahara. */
+      .get("/perlu-dicek", lihat, async (c) => {
+        const { rows } = await db.execute(sql`
+          select i.id, i.provider_ref "providerRef", i.total::float8 total,
+            i.jumlah_bayar::float8 "jumlahBayar", i.dibuat_at "dibuatAt", i.lunas_at "lunasAt",
+            case when i.status = 'selisih' then 'selisih' else 'ganda' end jenis,
+            u.nama "waliNama", string_agg(distinct s.nama, ', ') "santriNama",
+            array_agg(t.periode order by t.periode) periode
+          from payment_intent i
+          join users u on u.id = i.user_id
+          join payment_intent_item it on it.intent_id = i.id
+          join tagihan t on t.id = it.tagihan_id
+          join santri s on s.id = t.santri_id
+          where i.dicek_at is null and (i.status = 'selisih' or (i.status = 'lunas' and exists (
+            select 1 from payment_intent_item x join pembayaran p on p.tagihan_id = x.tagihan_id
+            where x.intent_id = i.id and p.intent_id is distinct from i.id)))
+          group by i.id, u.nama
+          order by i.dibuat_at desc limit 100`);
+        return c.json(rows);
+      })
+      .post("/perlu-dicek/:id/selesai", kelola, async (c) => {
+        const id = paramId(c);
+        const { catatan } = await parseBody(
+          c,
+          z.object({
+            catatan: z.string().trim().min(3, "Tulis catatan hasil pemeriksaan").max(300),
+          }),
+        );
+        const user = currentUser(c);
+        await db.transaction(async (tx) => {
+          const [row] = await tx
+            .update(paymentIntent)
+            .set({ dicekAt: new Date(), dicekOleh: user.id, catatanCek: catatan })
+            .where(and(eq(paymentIntent.id, id), sql`${paymentIntent.dicekAt} is null`))
+            .returning({ id: paymentIntent.id, status: paymentIntent.status });
+          if (!row) throw fail(404, "Data tidak ditemukan");
+          await audit(tx, {
+            userId: user.id,
+            aksi: "pembayaran.dicek",
+            entitas: "payment_intent",
+            entitasId: id,
+            sesudah: { status: row.status, catatan },
+            ip: c.get("ip"),
+          });
+        });
+        return c.json({ ok: true });
       })
       // ------------------------------------------------------------ antrean WA
       .get("/wa", lihat, async (c) => {

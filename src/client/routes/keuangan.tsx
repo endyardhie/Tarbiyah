@@ -77,7 +77,9 @@ function TagihanStaf() {
   const lokasi = useLokasi();
   const units = useUnits();
   const kelas = useKelas();
-  const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+  // Pencarian nama/NIS difilter di browser: data pribadi tidak masuk URL (aturan 15).
+  const { q: cari, ...filter } = f;
+  const qs = new URLSearchParams(Object.entries(filter).filter(([, v]) => v)).toString();
   const list = useQuery({
     queryKey: ["keuangan", "tagihan", qs],
     queryFn: () => api<TagihanRow[]>(`/keuangan/tagihan?${qs}`),
@@ -88,17 +90,24 @@ function TagihanStaf() {
   const [info, setInfo] = useState("");
   const kirim = useMutation({
     mutationFn: (pembayaranId: string) =>
-      api<{ pesan: number }>(`/keuangan/pembayaran/${pembayaranId}/kirim-bukti`, {
+      api<{ pesan: number; waAktif: boolean }>(`/keuangan/pembayaran/${pembayaranId}/kirim-bukti`, {
         method: "POST",
       }),
     onSuccess: (r) => {
-      setInfo(`Bukti bayar masuk antrean WA (${r.pesan} nomor).`);
+      setInfo(
+        r.waAktif
+          ? `Bukti bayar masuk antrean WA (${r.pesan} nomor).`
+          : "WA gateway sedang nonaktif: pesan dicatat sebagai “dilewati” dan bisa dikirim ulang dari tab Antrean WA setelah WA diaktifkan.",
+      );
       queryClient.invalidateQueries({ queryKey: ["keuangan"] });
     },
     onError: (e) => setInfo(errorMessage(e)),
   });
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
-  const rows = list.data ?? [];
+  const kata = cari.trim().toLowerCase();
+  const rows = (list.data ?? []).filter(
+    (r) => !kata || r.santriNama.toLowerCase().includes(kata) || r.nis.toLowerCase() === kata,
+  );
   const sum = (s?: string) =>
     rows
       .filter((r) => (s ? r.status === s : r.status !== "batal"))
@@ -402,6 +411,15 @@ function BayarManualModal({ tagihan, onClose }: { tagihan: TagihanRow; onClose: 
             {formatRupiah(tagihan.total)}
           </span>
         </p>
+        {tagihan.menungguQris && (
+          <p
+            role="alert"
+            className="rounded-2xl bg-warn-soft px-4 py-3 text-sm font-medium text-warn"
+          >
+            Wali sedang membayar tagihan ini lewat QRIS. Bila QRIS-nya juga dibayar, uang masuk dua
+            kali. Pastikan dulu ke wali sebelum mencatat.
+          </p>
+        )}
         <div className="flex gap-2" role="radiogroup" aria-label="Metode">
           {(["tunai", "transfer"] as const).map((m) => (
             <button
@@ -431,7 +449,7 @@ function BayarManualModal({ tagihan, onClose }: { tagihan: TagihanRow; onClose: 
         </p>
         <ErrorAlert>{error}</ErrorAlert>
         <Button type="submit" className="w-full" loading={simpan.isPending}>
-          Simpan pembayaran
+          {tagihan.menungguQris ? "Tetap catat pembayaran" : "Simpan pembayaran"}
         </Button>
       </form>
     </Modal>
@@ -777,6 +795,7 @@ function LaporanTab() {
               type="date"
               className={inputBase}
               value={dari}
+              max={sampai}
               onChange={(e) => setDari(e.target.value)}
             />
           )}
@@ -788,6 +807,7 @@ function LaporanTab() {
               type="date"
               className={inputBase}
               value={sampai}
+              min={dari}
               onChange={(e) => setSampai(e.target.value)}
             />
           )}
@@ -800,8 +820,9 @@ function LaporanTab() {
           <Printer size={18} /> Cetak / PDF
         </Button>
       </Card>
+      <PerluDicek />
       {lap.isError && <ErrorAlert>{errorMessage(lap.error)}</ErrorAlert>}
-      {!d ? (
+      {lap.isError ? null : !d ? (
         <div className="h-40 animate-pulse rounded-card bg-surface-muted" />
       ) : (
         <>
@@ -870,6 +891,107 @@ function LaporanTab() {
         </>
       )}
     </div>
+  );
+}
+
+type Masalah = {
+  id: string;
+  jenis: "selisih" | "ganda";
+  providerRef: string | null;
+  total: number;
+  jumlahBayar: number | null;
+  dibuatAt: string;
+  waliNama: string;
+  santriNama: string;
+  periode: string[];
+};
+
+/** QRIS selisih / bayar ganda yang perlu diperiksa bendahara (hilang setelah ditandai). */
+function PerluDicek() {
+  const { data: me } = useMe();
+  const kelola = hasPermission(me, "keuangan.kelola");
+  const q = useQuery({
+    queryKey: ["keuangan", "perlu-dicek"],
+    queryFn: () => api<Masalah[]>("/keuangan/perlu-dicek"),
+  });
+  const [pilih, setPilih] = useState<Masalah | null>(null);
+  if (!q.data?.length) return null;
+  return (
+    <Card className="border-warn">
+      <h2 className="text-lg font-semibold">Perlu dicek ({q.data.length})</h2>
+      <p className="mb-2 text-sm text-text2">
+        Pembayaran QRIS yang nominalnya tidak cocok atau membayar tagihan yang sudah lunas. Cocokkan
+        dengan mutasi QRIS, lalu catat bayar manual atau kembalikan dana bila perlu.
+      </p>
+      <ul className="divide-y divide-border">
+        {q.data.map((m) => (
+          <li key={m.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center">
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">
+                {m.jenis === "selisih" ? "Nominal tidak cocok" : "Bayar ganda"} · {m.santriNama}
+              </span>
+              <span className="block text-sm text-text2">
+                {m.periode.map(labelPeriode).join(", ")} · tagihan {formatRupiah(m.total)}
+                {m.jumlahBayar ? ` · QRIS ${formatRupiah(m.jumlahBayar)}` : ""} · wali {m.waliNama}
+              </span>
+              <span className="block text-sm text-text2">
+                {formatWaktu(m.dibuatAt)} · ID transaksi {m.providerRef ?? "—"}
+              </span>
+            </span>
+            {kelola && (
+              <Button variant="secondary" onClick={() => setPilih(m)}>
+                Tandai sudah dicek
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {pilih && <SelesaiCekModal masalah={pilih} onClose={() => setPilih(null)} />}
+    </Card>
+  );
+}
+
+function SelesaiCekModal({ masalah, onClose }: { masalah: Masalah; onClose: () => void }) {
+  const [catatan, setCatatan] = useState("");
+  const [error, setError] = useState("");
+  const simpan = useMutation({
+    mutationFn: () => api(`/keuangan/perlu-dicek/${masalah.id}/selesai`, { body: { catatan } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["keuangan", "perlu-dicek"] });
+      onClose();
+    },
+    onError: (e) => setError(errorMessage(e)),
+  });
+  return (
+    <Modal open onOpenChange={(o) => !o && onClose()} title="Tandai sudah dicek">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          simpan.mutate();
+        }}
+        className="space-y-4"
+      >
+        <p>
+          {masalah.santriNama} · {masalah.periode.map(labelPeriode).join(", ")}
+        </p>
+        <Field label="Catatan hasil pemeriksaan" hint="Mis. “Dana Rp 7 dikembalikan ke wali”.">
+          {(id) => (
+            <Input
+              id={id}
+              value={catatan}
+              minLength={3}
+              maxLength={300}
+              onChange={(e) => setCatatan(e.target.value)}
+              required
+            />
+          )}
+        </Field>
+        <ErrorAlert>{error}</ErrorAlert>
+        <Button type="submit" className="w-full" loading={simpan.isPending}>
+          Simpan
+        </Button>
+      </form>
+    </Modal>
   );
 }
 

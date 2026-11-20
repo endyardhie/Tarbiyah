@@ -63,12 +63,22 @@ export function isPureWali(me: Me | null | undefined) {
   );
 }
 
+/** Bendahara/staf keuangan (hanya tampilan; server tetap memeriksa can()). */
+export function aksesKeuangan(me: Me | null | undefined) {
+  return (
+    hasPermission(me, "keuangan.lihat") ||
+    hasPermission(me, "keuangan.kelola") ||
+    hasPermission(me, "keuangan.catat_manual")
+  );
+}
+
 /** Menu sesuai hak pengguna (hanya tampilan; server tetap memeriksa can()). */
 export function visibleNav(me: Me | null | undefined) {
   const wali = isPureWali(me);
   return NAV_ITEMS.filter((i) => {
     if (i.to === "/sistem") return hasPermission(me, "pengguna.kelola");
     if (i.to === "/sekolah") return !wali;
+    if (i.to === "/keuangan") return aksesKeuangan(me) || !!me?.relasi.anak.length;
     return true;
   });
 }
@@ -90,6 +100,14 @@ export function mobileNav(me: Me | null | undefined): NavItem[] {
       item("/", "Beranda", House),
       item("/presensi", "Presensi", ClipboardCheck),
       item("/akademik", "Akademik", BookOpen),
+      item("/notifikasi", "Notifikasi", Bell),
+    ];
+  }
+  if (!me?.isAdmin && aksesKeuangan(me)) {
+    return [
+      item("/", "Beranda", House),
+      item("/keuangan", "Keuangan", Wallet),
+      item("/informasi", "Informasi", Megaphone),
       item("/notifikasi", "Notifikasi", Bell),
     ];
   }

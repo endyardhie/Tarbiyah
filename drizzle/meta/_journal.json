@@ -57,6 +57,13 @@
       "when": 1795151743415,
       "tag": "0007_keuangan",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795154360487,
+      "tag": "0008_intent_dicek",
+      "breakpoints": true
     }
   ]
 }

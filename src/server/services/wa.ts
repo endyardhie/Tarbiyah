@@ -96,6 +96,11 @@ export async function queueWa(
   return rows.map((r) => r.id);
 }
 
+/** Kode OTP tidak disimpan terbuka: setelah pesan selesai diproses, angkanya disamarkan. */
+export const samarkanOtp = (pesan: string) => pesan.replace(/\b\d{6}\b/g, "******");
+const samarkan = (row: { rujukanTipe: string | null; pesan: string }) =>
+  row.rujukanTipe === "otp" ? { pesan: samarkanOtp(row.pesan) } : {};
+
 type Deps = {
   db: Db;
   encryptionKey: string;
@@ -115,7 +120,7 @@ export async function processWaJob(deps: Deps, outboxId: string) {
   if (!cfg) {
     await db
       .update(waOutbox)
-      .set({ status: "dilewati", error: "WA gateway nonaktif" })
+      .set({ status: "dilewati", error: "WA gateway nonaktif", ...samarkan(row) })
       .where(eq(waOutbox.id, outboxId));
     return "dilewati";
   }
@@ -124,7 +129,7 @@ export async function processWaJob(deps: Deps, outboxId: string) {
     await (deps.send ?? gowaSend)(cfg, row.nomor, row.pesan);
     await db
       .update(waOutbox)
-      .set({ status: "terkirim", percobaan, error: null, terkirimAt: new Date() })
+      .set({ status: "terkirim", percobaan, error: null, terkirimAt: new Date(), ...samarkan(row) })
       .where(eq(waOutbox.id, outboxId));
     return "terkirim";
   } catch (e) {
@@ -132,7 +137,7 @@ export async function processWaJob(deps: Deps, outboxId: string) {
     const habis = percobaan >= WA_MAX_PERCOBAAN;
     await db
       .update(waOutbox)
-      .set({ status: habis ? "gagal" : "antri", percobaan, error })
+      .set({ status: habis ? "gagal" : "antri", percobaan, error, ...(habis ? samarkan(row) : {}) })
       .where(eq(waOutbox.id, outboxId));
     if (habis) return "gagal";
     throw e;
@@ -147,7 +152,10 @@ export async function resendWa(tx: Db, client: pg.PoolClient, boss: PgBoss, id: 
   const [row] = await tx
     .update(waOutbox)
     .set({ status: "antri", percobaan: 0, error: null })
-    .where(sql`${waOutbox.id} = ${id} and ${waOutbox.status} in ('gagal', 'dilewati')`)
+    .where(
+      sql`${waOutbox.id} = ${id} and ${waOutbox.status} in ('gagal', 'dilewati')
+        and ${waOutbox.rujukanTipe} is distinct from 'otp'`,
+    )
     .returning({ id: waOutbox.id });
   if (!row) return false;
   await boss.insert(

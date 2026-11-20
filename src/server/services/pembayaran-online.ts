@@ -38,12 +38,15 @@ export async function intentView(db: Db, id: string): Promise<IntentView | null>
     .innerJoin(tagihan, eq(tagihan.id, paymentIntentItem.tagihanId))
     .where(eq(paymentIntentItem.intentId, id))
     .orderBy(tagihan.periode);
+  // Lewat batas waktu tapi rekonsiliasi belum jalan: tampil sebagai kedaluwarsa, QR disembunyikan.
+  const lewat = i.status === "menunggu" && !!i.kedaluwarsaAt && i.kedaluwarsaAt <= new Date();
+  const status = lewat ? "kedaluwarsa" : i.status;
   return {
     id: i.id,
-    status: i.status,
+    status,
     total: i.total,
     jumlahBayar: i.jumlahBayar,
-    qris: i.status === "menunggu" ? i.qris : null,
+    qris: status === "menunggu" ? i.qris : null,
     kedaluwarsaAt: i.kedaluwarsaAt?.toISOString() ?? null,
     bulan: items.map((x) => labelPeriode(x.periode)),
   };

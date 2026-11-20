@@ -78,15 +78,14 @@ export async function getSemester(db: DbLike, id: string | undefined, tahunAjara
 
 /** Bobot, skala predikat, dan aspek rapor untuk satu unit (bawaan bila belum diatur). */
 export async function pengaturanUnit(db: DbLike, unitId: string) {
-  const [b, s, a] = await Promise.all([
-    db.select().from(bobotNilai).where(eq(bobotNilai.unitId, unitId)),
-    db.select().from(skalaPredikat).where(eq(skalaPredikat.unitId, unitId)),
-    db
-      .select()
-      .from(raporAspek)
-      .where(eq(raporAspek.unitId, unitId))
-      .orderBy(asc(raporAspek.urutan)),
-  ]);
+  // Berurutan: `db` bisa berupa transaksi (satu koneksi) yang tidak boleh menerima query paralel.
+  const b = await db.select().from(bobotNilai).where(eq(bobotNilai.unitId, unitId));
+  const s = await db.select().from(skalaPredikat).where(eq(skalaPredikat.unitId, unitId));
+  const a = await db
+    .select()
+    .from(raporAspek)
+    .where(eq(raporAspek.unitId, unitId))
+    .orderBy(asc(raporAspek.urutan));
   const bobot = b.length
     ? (Object.fromEntries(
         JENIS.map((j) => [j, b.find((x) => x.jenis === j)?.bobot ?? 0]),
@@ -253,11 +252,8 @@ export async function kunciRapor(
     .innerJoin(mapel, eq(mapel.id, pengajaran.mapelId))
     .where(eq(pengajaran.kelasId, kelasId));
   const absen = await rekapAbsen(tx, pendaftaranIds, sem);
-  const otomatis = new Map(
-    await Promise.all(
-      ajar.map(async (p) => [p.id, await nilaiOtomatis(tx, p.id, sem.id, set.bobot)] as const),
-    ),
-  );
+  const otomatis = new Map<string, Awaited<ReturnType<typeof nilaiOtomatis>>>();
+  for (const p of ajar) otomatis.set(p.id, await nilaiOtomatis(tx, p.id, sem.id, set.bobot));
   for (const pid of pendaftaranIds) {
     const r = await ensureRapor(tx, pid, sem.id);
     const saved = await tx.select().from(raporNilai).where(eq(raporNilai.raporId, r.id));

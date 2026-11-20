@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "../db/client";
+import type { Db, Tx } from "../db/client";
 
 /** Detik sampai boleh mencoba lagi, atau 0 bila belum terkunci. */
 export async function lockedFor(db: Db, key: string, limit: number): Promise<number> {
@@ -19,6 +19,6 @@ export async function recordFailure(db: Db, key: string, windowSec: number) {
       reset_at = case when rate_limits.reset_at <= now() then excluded.reset_at else rate_limits.reset_at end`);
 }
 
-export async function clearFailures(db: Db, key: string) {
+export async function clearFailures(db: Db | Tx, key: string) {
   await db.execute(sql`delete from rate_limits where key = ${key}`);
 }

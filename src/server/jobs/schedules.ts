@@ -2,8 +2,7 @@ import { sql } from "drizzle-orm";
 import type pg from "pg";
 import type PgBoss from "pg-boss";
 import type { Db } from "../db/client";
-import { schoolToday } from "../lib/tanggal";
-import { buatTagihan } from "../services/keuangan";
+import { tagihanHarian } from "../services/keuangan";
 import { rekonsiliasi } from "../services/pembayaran-online";
 import { schoolTimeZone } from "../services/pengaturan";
 import { sendPush } from "../services/push";
@@ -42,15 +41,15 @@ export async function registerJobs(
     await db.execute(sql`delete from sessions where kedaluwarsa < now()`);
     await db.execute(sql`delete from rate_limits where reset_at < now()`);
     await db.execute(sql`delete from otp_codes where kedaluwarsa < now() - interval '1 day'`);
+    // Cadangan bila worker WA tidak sempat memproses: pesan OTP lama tetap disamarkan.
+    await db.execute(sql`update wa_outbox set pesan = regexp_replace(pesan, '[0-9]{6}', '******', 'g')
+      where rujukan_tipe = 'otp' and dibuat_at < now() - interval '1 hour' and pesan ~ '[0-9]{6}'`);
   });
 
   // Tagihan SPP bulan berjalan dibuat tanggal 1 (idempoten; terlewat → tombol "Buat tagihan").
   await boss.work(QUEUES.tagihanBuat, { pollingIntervalSeconds: 60 }, async () => {
-    const tz = await schoolTimeZone(db);
-    const today = schoolToday(tz);
-    if (!today.endsWith("-01")) return;
-    const hasil = await buatTagihan(db, today.slice(0, 7), { simpan: true });
-    console.log(`[tagihan] ${hasil.periode}: ${hasil.dibuat} tagihan dibuat`);
+    const hasil = await tagihanHarian(db);
+    if (hasil) console.log(`[tagihan] ${hasil.periode}: ${hasil.dibuat} tagihan dibuat`);
   });
 
   // Cadangan webhook pembayaran yang hilang.
