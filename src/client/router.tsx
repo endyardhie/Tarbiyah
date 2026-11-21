@@ -20,6 +20,7 @@ import { BerandaPage } from "./routes/beranda";
 import { CetakKeuanganPage, CetakPresensiPage, CetakRaporPage } from "./routes/cetak";
 import { ImporPage } from "./routes/impor";
 import { InformasiPage, KalenderPage } from "./routes/informasi";
+import { CetakJadwalPage, JadwalPage } from "./routes/jadwal";
 import { KeuanganPage } from "./routes/keuangan";
 import { LogPage } from "./routes/log";
 import { LoginPage, LupaPasswordPage } from "./routes/login";
@@ -93,6 +94,11 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/cetak/rapor", component: CetakRaporPage }),
   createRoute({
     getParentRoute: () => rootRoute,
+    path: "/cetak/jadwal",
+    component: CetakJadwalPage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
     path: "/cetak/keuangan",
     component: CetakKeuanganPage,
   }),
@@ -110,6 +116,7 @@ const routeTree = rootRoute.addChildren([
     page("/keuangan", KeuanganPage),
     page("/informasi", InformasiPage),
     page("/informasi/kalender", KalenderPage),
+    page("/informasi/jadwal", JadwalPage),
     page("/informasi/pengumuman", PengumumanPage),
     page("/notifikasi", NotifikasiPage),
     page("/notifikasi/aktifkan", AktifkanNotifikasiPage),

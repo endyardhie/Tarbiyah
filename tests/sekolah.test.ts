@@ -179,6 +179,11 @@ describe("pilihan guru & daftar wali", () => {
     expect(guru.find((g) => g.nama === "Ustadz A")?.wali).toBe(false);
     expect(guru.slice(iIbu).every((g) => g.wali)).toBe(true);
     expect((await t.req("GET", "/api/guru-pilihan", { cookie: cookie.wali })).status).toBe(403);
+    // Jadwal pelajaran boleh dilihat semua pengguna, termasuk wali santri.
+    const jadwal = await t.req("GET", "/api/pengajaran", { cookie: cookie.wali });
+    expect(jadwal.status).toBe(200);
+    expect(jadwal.body.length).toBeGreaterThan(0);
+    expect((await t.req("GET", "/api/kelas", { cookie: cookie.wali })).status).toBe(200);
     const wali = (await t.req("GET", "/api/wali", { cookie: admin })).body;
     const ibu = wali.find((w: { nama: string }) => w.nama === "Ibu Cahya");
     expect(ibu.anak.map((a: { nis: string }) => a.nis)).toEqual(["1003"]);

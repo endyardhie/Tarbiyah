@@ -22,6 +22,7 @@ export type AppPath =
   | "/keuangan"
   | "/informasi"
   | "/informasi/kalender"
+  | "/informasi/jadwal"
   | "/informasi/pengumuman"
   | "/notifikasi"
   | "/notifikasi/aktifkan"

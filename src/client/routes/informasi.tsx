@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Megaphone,
   Plus,
   Trash2,
@@ -61,6 +62,14 @@ export function InformasiPage() {
       badge: 0,
     },
     {
+      to: "/informasi/jadwal" as const,
+      icon: Clock,
+      cls: "bg-danger-soft text-danger",
+      title: "Jadwal pelajaran",
+      desc: "Jadwal semua kelas, bisa dicetak",
+      badge: 0,
+    },
+    {
       to: "/informasi/pengumuman" as const,
       icon: Megaphone,
       cls: "bg-soft text-on-soft",
@@ -80,7 +89,7 @@ export function InformasiPage() {
   return (
     <>
       <PageHeader title="Informasi" subtitle="Kalender, pengumuman, dan notifikasi." />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {items.map(({ to, icon, cls, title, desc, badge }) => (
           <HubLink key={to} to={to} icon={icon} cls={cls} judul={title} ket={desc} badge={badge} />
         ))}
