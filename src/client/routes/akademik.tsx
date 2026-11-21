@@ -318,6 +318,9 @@ function PengaturanForm({ unitId, data }: { unitId: string; data: Pengaturan }) 
       setMsg("Tersimpan.");
       await queryClient.invalidateQueries({ queryKey: ["akademik"] });
       await queryClient.invalidateQueries({ queryKey: ["rapor"] });
+      // Aspek baru mendapat id dari server; tanpa id, simpan berikutnya membuat aspek ganda.
+      const baru = queryClient.getQueryData<Pengaturan>(["akademik", "pengaturan", unitId]);
+      if (baru) setAspek(baru.aspek.filter((a) => a.aktif));
     },
     onError: (e) => setMsg(errorMessage(e)),
   });
@@ -488,7 +491,7 @@ export function PengaturanAkademikPage() {
       ) : q.isError ? (
         <ErrorAlert>{errorMessage(q.error)}</ErrorAlert>
       ) : (
-        <PengaturanForm key={unitId + q.dataUpdatedAt} unitId={unitId} data={q.data} />
+        <PengaturanForm key={unitId} unitId={unitId} data={q.data} />
       )}
     </>
   );
@@ -612,7 +615,7 @@ export function TemplateRaporPage() {
       ) : q.isError ? (
         <ErrorAlert>{errorMessage(q.error)}</ErrorAlert>
       ) : (
-        <TemplateEditor key={unitId + q.dataUpdatedAt} unitId={unitId} initial={q.data} />
+        <TemplateEditor key={unitId} unitId={unitId} initial={q.data} />
       )}
     </>
   );

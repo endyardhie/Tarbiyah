@@ -55,6 +55,8 @@ function PengaturanForm({ data }: { data: PengaturanBackupView }) {
     mutationFn: () => api("/backup/pengaturan", { method: "PUT", body: v }),
     onSuccess: () => {
       setInfo({ ok: true, pesan: "Tersimpan." });
+      // Application key tidak pernah dikirim balik; kosongkan lagi agar tidak terkirim ulang.
+      setV((x) => ({ ...x, appKey: "" }));
       queryClient.invalidateQueries({ queryKey: ["backup"] });
     },
     onError: (e) => setError(errorMessage(e)),
@@ -439,7 +441,7 @@ export function BackupPage() {
         <Card className="lg:col-span-7">
           <h2 className="mb-3 text-lg font-semibold">Pengaturan</h2>
           {setting.data ? (
-            <PengaturanForm key={setting.dataUpdatedAt} data={setting.data} />
+            <PengaturanForm data={setting.data} />
           ) : (
             <div className="h-40 animate-pulse rounded-2xl bg-surface-muted" />
           )}

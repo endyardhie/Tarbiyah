@@ -220,7 +220,7 @@ export function PengaturanPage() {
         <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
           <Card className="lg:col-span-7">
             <h2 className="mb-4 text-lg font-semibold">Identitas</h2>
-            <IdentitasForm key={ident.dataUpdatedAt} data={ident.data} />
+            <IdentitasForm data={ident.data} />
           </Card>
           <Card className="lg:col-span-5">
             <h2 className="mb-4 text-lg font-semibold">Logo & ikon aplikasi</h2>
