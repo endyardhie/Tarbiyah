@@ -52,7 +52,7 @@ Buka **Menu**, lalu ketuk kartu nama Anda di bagian atas.
 
 ![Notifikasi](gambar/umum-notifikasi.jpg)
 
-Notifikasi berisi pemberitahuan PR baru, nilai, pengumuman, dan tagihan.
+Notifikasi berisi pemberitahuan PR baru, nilai, dan pengumuman dari sekolah.
 
 Agar pemberitahuan muncul di HP walau aplikasi tertutup, buka **Notifikasi › Aktifkan
 notifikasi**, tekan **Aktifkan**, lalu pilih **Izinkan** saat browser bertanya. Di iPhone,

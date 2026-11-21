@@ -77,8 +77,8 @@ const GAMBAR = [
     langkah: [klik("Syifa")],
     rapor: true,
     lebar: 820,
-    // Rapor ada di iframe setinggi 80% layar; layar tinggi agar tanda tangan ikut terlihat.
-    tinggi: 1500,
+    tinggi: 1150,
+    penuh: true,
   },
 
   {
@@ -204,6 +204,14 @@ const GAMBAR = [
   { nama: "admin-pengajaran", akun: "admin", url: "/sekolah/pengajaran" },
   { nama: "admin-tahun-baru", akun: "admin", url: "/sekolah/tahun-baru", penuh: true },
   { nama: "admin-log", akun: "admin", url: "/sistem/log" },
+
+  // Gambar untuk README (satu layar, tanpa gulir).
+  { nama: "readme-wali-beranda", akun: "wali", url: "/" },
+  { nama: "readme-wali-akademik", akun: "wali", url: "/akademik", langkah: [klik("Syifa")] },
+  { nama: "readme-jadwal", akun: "wali", url: "/informasi/jadwal" },
+  { nama: "readme-kepsek-beranda", akun: "kepsek", url: "/" },
+  { nama: "readme-gelap", akun: "walikelas", url: "/presensi", gelap: true },
+  { nama: "readme-desktop", akun: "kepsek", url: "/", lebar: 1280, tinggi: 800 },
 ];
 
 const hanya = process.argv.slice(2);
@@ -248,10 +256,19 @@ for (const g of daftar) {
         __klik('Rapor semester'); window.open = o; return u; })()`);
       await chrome.buka(ASAL + url);
       await chrome.tenang(4000);
+      // Rapor ada di iframe setinggi 80% layar; samakan tingginya dengan isi agar tidak terpotong/kosong.
+      await chrome.js(`(() => { const f = document.querySelector('iframe');
+        f.style.height = f.contentDocument.documentElement.scrollHeight + 24 + 'px'; return true; })()`);
     }
     if (g.lebar) {
       await chrome.ukuran(g.lebar, g.tinggi ?? 844, false);
       await chrome.tenang(3000);
+    }
+    if (g.gelap) {
+      // Tema dibaca saat halaman dimuat (localStorage "tema"); set lalu muat ulang.
+      await chrome.js("localStorage.setItem('tema', 'dark'), true");
+      await chrome.buka(ASAL + g.url);
+      await chrome.js(BANTU);
     }
     const jpg = await chrome.foto({
       penuh: g.penuh,
@@ -260,6 +277,7 @@ for (const g of daftar) {
       tinggi: g.tinggi ?? 844,
     });
     writeFileSync(join(KELUAR, `${g.nama}.jpg`), jpg);
+    if (g.gelap) await chrome.js("localStorage.removeItem('tema'), true");
     console.log("✓", g.nama);
   } catch (e) {
     console.log("✗", g.nama, e.message);
