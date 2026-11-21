@@ -24,7 +24,15 @@ import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
 import { formatTanggal } from "../lib/format";
 import type { AppPath } from "../lib/nav";
-import { HARI, hariOptions, useGuru, useLokasi, useTahunAjaran, useUnits } from "../lib/sekolah";
+import {
+  HARI,
+  hariOptions,
+  labelGuru,
+  useGuru,
+  useLokasi,
+  useTahunAjaran,
+  useUnits,
+} from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, inputBase, inputClass } from "../ui/Field";
 import { Modal } from "../ui/Modal";
@@ -520,11 +528,7 @@ export function KelasPage() {
               label: "Wali kelas",
               type: "select",
               empty: "Belum ada",
-              options: opt(
-                guru.data,
-                (g) => g.id,
-                (g) => g.nama,
-              ),
+              options: opt(guru.data, (g) => g.id, labelGuru),
             },
             { name: "aktif", label: "Aktif", type: "checkbox" },
           ]}

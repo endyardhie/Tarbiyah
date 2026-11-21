@@ -20,10 +20,14 @@ export const useKelas = (tahunAjaranId = "") =>
     queryKey: ["kelas", tahunAjaranId ? `tahunAjaranId=${tahunAjaranId}` : ""],
     queryFn: () => api<Kelas[]>(`/kelas${tahunAjaranId ? `?tahunAjaranId=${tahunAjaranId}` : ""}`),
   });
+/** Label pilihan guru: akun yang (baru) wali santri ditandai agar tidak tertukar dengan guru. */
+export const labelGuru = (g: { nama: string; wali: boolean; anak: string | null }) =>
+  g.wali ? `${g.nama} · wali ${g.anak ?? "santri"}` : g.nama;
 export const useGuru = (enabled = true) =>
   useQuery({
     queryKey: ["guru-pilihan"],
-    queryFn: () => api<{ id: string; nama: string }[]>("/guru-pilihan"),
+    queryFn: () =>
+      api<{ id: string; nama: string; wali: boolean; anak: string | null }[]>("/guru-pilihan"),
     enabled,
   });
 export const usePublicConfig = () =>

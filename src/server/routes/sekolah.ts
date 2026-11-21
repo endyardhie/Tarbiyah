@@ -269,27 +269,31 @@ export function sekolahRoutes({ db }: AppDeps) {
       }),
     )
     .get("/guru-pilihan", requireUser, async (c) => {
-      // Nama staf untuk pilihan wali kelas / guru pengajar; wali santri murni tidak ditampilkan.
+      // Pilihan wali kelas / guru pengajar: semua akun aktif. Orang tua santri boleh mengajar,
+      // jadi wali santri murni ikut, ditandai `wali` dan diurutkan setelah guru/staf.
       const user = currentUser(c);
       const allowed =
         (await can(user, "kelas.kelola")) ||
         (await can(user, "jadwal.kelola")) ||
         (await can(user, "pengguna.kelola"));
       if (!allowed) throw fail(403, "Anda tidak punya akses");
+      const wali = sql<boolean>`(exists (select 1 from santri_wali sw where sw.user_id = "users"."id")
+        and not exists (select 1 from user_roles ur where ur.user_id = "users"."id")
+        and not exists (select 1 from kelas k where k.wali_kelas_id = "users"."id")
+        and not exists (select 1 from pengajaran p where p.guru_id = "users"."id"))`;
       return c.json(
         await db
-          .select({ id: users.id, nama: users.nama })
+          .select({
+            id: users.id,
+            nama: users.nama,
+            wali,
+            // Pembeda wali bernama sama: nama anaknya.
+            anak: sql<string | null>`(select string_agg(s.nama, ', ' order by s.nama)
+              from santri_wali sw join santri s on s.id = sw.santri_id where sw.user_id = "users"."id")`,
+          })
           .from(users)
-          .where(
-            and(
-              eq(users.status, "aktif"),
-              sql`(exists (select 1 from user_roles ur where ur.user_id = "users"."id")
-                or not exists (select 1 from santri_wali sw where sw.user_id = "users"."id")
-                or exists (select 1 from kelas k where k.wali_kelas_id = "users"."id")
-                or exists (select 1 from pengajaran p where p.guru_id = "users"."id"))`,
-            ),
-          )
-          .orderBy(asc(users.nama)),
+          .where(eq(users.status, "aktif"))
+          .orderBy(wali, asc(users.nama)),
       );
     });
 }

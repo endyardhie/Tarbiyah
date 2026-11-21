@@ -7,7 +7,15 @@ import { ListSkeleton } from "../components/MasterList";
 import { EmptyState, PageHeader } from "../components/Page";
 import { api, errorMessage, queryClient } from "../lib/api";
 import { hasPermission, useMe } from "../lib/auth";
-import { HARI, hariOptions, kelasLabel, useGuru, useKelas, useMapel } from "../lib/sekolah";
+import {
+  HARI,
+  hariOptions,
+  kelasLabel,
+  labelGuru,
+  useGuru,
+  useKelas,
+  useMapel,
+} from "../lib/sekolah";
 import { Button } from "../ui/Button";
 import { ErrorAlert, inputClass } from "../ui/Field";
 import { Modal } from "../ui/Modal";
@@ -257,7 +265,7 @@ export function PengajaranPage() {
                 label: "Guru pengajar",
                 type: "select",
                 required: true,
-                options: guruAll.data?.map((g) => ({ value: g.id, label: g.nama })) ?? [],
+                options: guruAll.data?.map((g) => ({ value: g.id, label: labelGuru(g) })) ?? [],
               },
               { name: "kkm", label: "KKM", type: "number", hint: "0–100, opsional." },
             ]}

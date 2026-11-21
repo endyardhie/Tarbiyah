@@ -164,12 +164,20 @@ describe("struktur sekolah", () => {
 });
 
 describe("pilihan guru & daftar wali", () => {
-  it("pilihan guru berisi staf, bukan wali santri murni; daftar wali berisi anaknya", async () => {
-    const guru = (await t.req("GET", "/api/guru-pilihan", { cookie: admin })).body.map(
-      (g: { nama: string }) => g.nama,
+  it("pilihan guru: staf dulu, lalu wali santri (orang tua boleh mengajar); daftar wali berisi anaknya", async () => {
+    const guru = (await t.req("GET", "/api/guru-pilihan", { cookie: admin })).body as {
+      nama: string;
+      wali: boolean;
+      anak: string | null;
+    }[];
+    expect(guru.map((g) => g.nama)).toEqual(
+      expect.arrayContaining(["Ustadz A", "Ustadzah C", "Staf Lain", "Ibu Cahya"]),
     );
-    expect(guru).toEqual(expect.arrayContaining(["Ustadz A", "Ustadzah C", "Staf Lain"]));
-    expect(guru).not.toContain("Ibu Cahya");
+    const iIbu = guru.findIndex((g) => g.nama === "Ibu Cahya");
+    expect(guru[iIbu]?.wali).toBe(true);
+    expect(guru[iIbu]).toMatchObject({ anak: expect.any(String) });
+    expect(guru.find((g) => g.nama === "Ustadz A")?.wali).toBe(false);
+    expect(guru.slice(iIbu).every((g) => g.wali)).toBe(true);
     expect((await t.req("GET", "/api/guru-pilihan", { cookie: cookie.wali })).status).toBe(403);
     const wali = (await t.req("GET", "/api/wali", { cookie: admin })).body;
     const ibu = wali.find((w: { nama: string }) => w.nama === "Ibu Cahya");
