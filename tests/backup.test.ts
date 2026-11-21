@@ -81,6 +81,11 @@ describe.skipIf(!adaPgDump && !process.env.CI)("backup & restore", () => {
   it("hanya admin; secret B2 tidak dikirim balik; tes koneksi tulis-baca-daftar", async () => {
     expect((await t.req("GET", "/api/backup", { cookie: guru })).status).toBe(403);
     expect((await t.req("POST", "/api/backup", { cookie: guru, body: {} })).status).toBe(403);
+    // Belum diatur: pesan menyebut kolom yang kurang, tanpa stack trace.
+    const kosong = await t.req("POST", "/api/backup/tes-b2", { cookie: admin, body: {} });
+    expect(kosong.body.ok).toBe(false);
+    expect(kosong.body.pesan).toContain("Bucket");
+    expect(kosong.body.pesan).not.toMatch(/\bat\s|\.ts:/);
     const put = await t.req("PUT", "/api/backup/pengaturan", {
       cookie: admin,
       body: PENGATURAN_B2,

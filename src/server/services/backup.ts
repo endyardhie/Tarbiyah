@@ -94,6 +94,16 @@ export async function getB2(deps: Pick<BackupDeps, "db" | "encryptionKey" | "mak
 
 /** Tulis, baca, dan daftar satu objek uji (tanpa hapus: kunci B2 memang tidak punya izin hapus). */
 export async function tesKoneksiB2(deps: Pick<BackupDeps, "db" | "encryptionKey" | "makeB2">) {
+  const s = await getBackupSetting(deps.db);
+  const kurang = [
+    !s.b2Aktif && "centang “Salin backup ke Backblaze B2”",
+    !s.endpoint && "Endpoint S3",
+    !s.bucket && "Bucket",
+    !s.keyId && "Key ID",
+    !s.appKey && "Application key",
+  ].filter(Boolean);
+  if (kurang.length)
+    throw new Error(`Pengaturan B2 yang tersimpan belum lengkap: ${kurang.join(", ")}.`);
   const b2 = await getB2(deps);
   if (!b2) throw new Error("B2 belum aktif atau pengaturannya belum lengkap");
   const key = `${B2_PREFIX}tes-koneksi.txt`;

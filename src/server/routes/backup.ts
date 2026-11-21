@@ -35,6 +35,8 @@ export const backupDepsDari = (deps: AppDeps): BackupDeps => ({
 });
 
 /** Backup & restore: hanya admin (izin backup.kelola melekat pada admin). */
+const pesanError = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 300);
+
 export function backupRoutes(deps: AppDeps) {
   const { db, storage } = deps;
   const bd = backupDepsDari(deps);
@@ -77,7 +79,9 @@ export function backupRoutes(deps: AppDeps) {
             pesan: "Berhasil menulis, membaca, dan mendaftar objek uji di B2.",
           });
         } catch (e) {
-          return c.json({ ok: false, pesan: `Gagal: ${safeError(e).slice(0, 300)}` });
+          // Pesan saja, tanpa stack trace (safeError untuk log server).
+          console.error(`[backup] tes B2: ${safeError(e)}`);
+          return c.json({ ok: false, pesan: `Gagal: ${pesanError(e)}` });
         }
       })
       .get("/", ...admin, async (c) =>
@@ -120,7 +124,8 @@ export function backupRoutes(deps: AppDeps) {
         try {
           return c.json(await daftarB2(bd));
         } catch (e) {
-          throw fail(409, `Daftar B2 gagal dibaca: ${safeError(e).slice(0, 200)}`);
+          console.error(`[backup] daftar B2: ${safeError(e)}`);
+          throw fail(409, `Daftar B2 gagal dibaca: ${pesanError(e)}`);
         }
       })
       .post("/b2/ambil", ...admin, async (c) => {
