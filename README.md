@@ -4,8 +4,6 @@ Sistem informasi sekolah, pondok pesantren, dan madrasah — multi-lokasi dan mu
 Presensi, akademik & rapor, keuangan (SPP), informasi, dan notifikasi dalam satu aplikasi web
 (PWA) yang di-self-host.
 
-**Author:** Endy Ardhie
-
 ## Teknologi
 
 Node.js 24 · TypeScript · Hono · React + Vite · Tailwind CSS v4 · PostgreSQL 17 + Drizzle ORM ·
