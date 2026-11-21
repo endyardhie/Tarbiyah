@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="src/client/public/icons/icon-192.png" alt="Logo TARBIYAH" width="96" height="96">
+  <img src="docs/logo-tarbiyah.png" alt="TARBIYAH" width="240">
 </p>
-
-<h1 align="center">TARBIYAH</h1>
 
 <p align="center">
   <strong>Aplikasi sekolah gratis untuk pondok pesantren, madrasah, dan sekolah.</strong><br>

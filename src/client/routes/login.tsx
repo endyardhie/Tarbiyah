@@ -45,9 +45,12 @@ export function BrandHeader({ title, subtitle }: { title: string; subtitle: stri
           className="mx-auto mb-4 size-20 rounded-[22px] bg-white object-contain p-1 shadow-soft"
         />
       ) : (
-        <span className="mx-auto mb-4 grid size-16 place-items-center rounded-[22px] bg-primary text-2xl font-extrabold text-on-primary shadow-soft">
-          T
-        </span>
+        // Logo bawaan TARBIYAH selama lembaga belum mengunggah logo sendiri.
+        <img
+          src="/icons/icon-192.png"
+          alt=""
+          className="mx-auto mb-4 size-20 shadow-soft rounded-[22px]"
+        />
       )}
       <p className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
         {config.data?.nama ?? "TARBIYAH"}

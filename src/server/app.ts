@@ -199,7 +199,8 @@ export function createApp(deps: AppDeps) {
     const id = await getIdentitas(db);
     if (id.ikon192Id) return servePublicFile(c, deps, id.ikon192Id);
     if (!deps.staticDir) return c.notFound();
-    const file = await readFile(join(deps.staticDir, "icons/icon-192.png"));
+    // Ikon iPhone harus tanpa transparansi (iOS mengisi area transparan dengan hitam).
+    const file = await readFile(join(deps.staticDir, "icons/apple-touch-icon.png"));
     return c.body(file, 200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
   });
 

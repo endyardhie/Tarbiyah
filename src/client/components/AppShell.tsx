@@ -21,9 +21,8 @@ function Brand({ compact = false }: { compact?: boolean }) {
           className="size-10 shrink-0 rounded-2xl bg-white object-contain p-0.5"
         />
       ) : (
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-lg font-extrabold text-on-primary">
-          T
-        </span>
+        // Logo bawaan TARBIYAH selama lembaga belum mengunggah logo sendiri.
+        <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0 rounded-[11px]" />
       )}
       {!compact && (
         <span className="truncate text-lg font-extrabold tracking-tight">
