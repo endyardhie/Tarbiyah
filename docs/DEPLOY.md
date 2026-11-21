@@ -254,7 +254,7 @@ Coolify → resource PostgreSQL → **Backups**:
   Labels). Ambil daftar IP terbaru:
 
   ```bash
-  curl -s https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 | paste -sd, -
+  for f in ips-v4 ips-v6; do curl -s https://www.cloudflare.com/$f; echo; done | grep . | paste -sd, -
   ```
 
   Tambahkan label `traefik.http.middlewares.tarbiyah-cf.ipallowlist.sourcerange=<daftar di atas>`
