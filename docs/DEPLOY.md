@@ -226,36 +226,50 @@ Coolify → resource PostgreSQL → **Backups**:
 
 ### 9. Firewall & Cloudflare
 
-- SSH hanya dengan kunci (`PasswordAuthentication no`), port 22 dibatasi ke IP admin bila bisa.
-- Port terbuka dari internet hanya **22, 80, 443**. Port PostgreSQL, GOWA, noken-pay, dan dashboard
-  Coolify (8000/6001/6002) tidak dibuka; dashboard Coolify dipasang di domain di belakang
-  Cloudflare/Access.
-- 80/443 **hanya dari IP Cloudflare** (syarat `TRUST_CLOUDFLARE=true`). Docker melewati aturan
-  `ufw` untuk port yang dipublikasikan container (Traefik), jadi aturannya dipasang di rantai
-  `DOCKER-USER`. Rantai ini biasanya sudah berakhir dengan `RETURN` bawaan Docker, sehingga aturan
-  yang ditambahkan dengan `-A` di belakangnya **tidak pernah berlaku**. Pakai `-I` (sisip di atas):
-  pertama `DROP`, lalu `RETURN` per IP Cloudflare yang disisipkan di atas `DROP` itu. Jalankan
-  sebagai root, sesuaikan interface publik `eth0`:
+- SSH hanya dengan kunci (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`).
+- **Docker melewati `ufw`** untuk port yang dipublikasikan container: aturan `ufw deny 8000` tidak
+  berlaku, port tetap terbuka. Port container yang tidak boleh dibuka dari internet ditutup di
+  rantai `DOCKER-USER`. Di rantai itu port sudah diterjemahkan ke port container (mis. 8000 → 8080),
+  jadi cocokkan port asal dengan `conntrack --ctorigdstport`, bukan `--dport`. `--ctdir ORIGINAL`
+  memastikan balasan koneksi keluar dari container tidak ikut terblokir. Sesuaikan interface publik
+  (`ip route get 1.1.1.1`) dan daftar port (`ss -tlnp`).
+- Uji dulu dengan pembatalan otomatis 10 menit (aturan hilang sendiri bila ada yang rusak):
 
   ```bash
-  iptables -I DOCKER-USER -i eth0 -p tcp -m multiport --dports 80,443 -j DROP
+  for p in 8000 6001 6002 8080 8123; do iptables -I DOCKER-USER -i eth0 -p tcp -m conntrack --ctorigdstport $p --ctdir ORIGINAL -j DROP; ip6tables -I DOCKER-USER -i eth0 -p tcp -m conntrack --ctorigdstport $p --ctdir ORIGINAL -j DROP 2>/dev/null; done; (sleep 600; iptables -F DOCKER-USER; ip6tables -F DOCKER-USER 2>/dev/null) &
   ```
+
+  Setelah dashboard Coolify (termasuk log langsung & terminal) dan semua aplikasi lewat domain
+  terbukti normal, simpan permanen lewat `ufw` (dimuat sebelum Docker saat boot):
 
   ```bash
-  for ip in $(curl -s https://www.cloudflare.com/ips-v4); do iptables -I DOCKER-USER -i eth0 -p tcp -m multiport --dports 80,443 -s "$ip" -j RETURN; done
+  for f in after.rules after6.rules; do printf '\n# BEGIN tarbiyah: tutup port container dari internet\n*filter\n:DOCKER-USER - [0:0]\n' >> /etc/ufw/$f; for p in 8000 6001 6002 8080 8123; do echo "-A DOCKER-USER -i eth0 -p tcp -m conntrack --ctorigdstport $p --ctdir ORIGINAL -j DROP" >> /etc/ufw/$f; done; printf 'COMMIT\n# END tarbiyah\n' >> /etc/ufw/$f; done; ufw reload
   ```
 
-  Periksa urutannya: `iptables -L DOCKER-USER -n --line-numbers` harus menampilkan semua `RETURN`
-  Cloudflare **di atas** `DROP`. Ulangi untuk IPv6 (`ip6tables`, `https://www.cloudflare.com/ips-v6`),
-  simpan dengan `iptables-persistent` (`netfilter-persistent save`), dan perbarui bila daftar IP
-  Cloudflare berubah. Uji dari mesin lain (bukan lewat Cloudflare):
+  Uji dari mesin lain: `timeout 5 bash -c "</dev/tcp/<IP-server>/8000"` harus gagal.
+- **Hanya Tarbiyah** yang dibatasi ke IP Cloudflare (syarat `TRUST_CLOUDFLARE=true`; tanpa ini
+  orang yang tahu IP server bisa memalsukan `CF-Connecting-IP` untuk mengakali batas percobaan
+  login per IP). Jangan batasi 80/443 untuk seluruh server bila ada aplikasi lain yang DNS-only.
+  Caranya lewat label Traefik di aplikasi Tarbiyah (Coolify › Configuration › General › Container
+  Labels). Ambil daftar IP terbaru:
 
   ```bash
-  curl -m 5 -I http://<IP-server>
+  curl -s https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 | paste -sd, -
   ```
 
-  Perintah itu harus **timeout**; sedangkan `https://<domain>` lewat Cloudflare tetap terbuka.
-- Cloudflare: SSL **Full (strict)**, *Always Use HTTPS*, WAF bawaan aktif.
+  Tambahkan label `traefik.http.middlewares.tarbiyah-cf.ipallowlist.sourcerange=<daftar di atas>`
+  dan tambahkan `tarbiyah-cf` ke label `traefik.http.routers.https-0-<uuid>.middlewares` yang sudah ada
+  (pisahkan dengan koma), lalu redeploy. Uji langsung ke IP, melewati Cloudflare:
+
+  ```bash
+  curl -sk -o /dev/null -w '%{http_code}\n' --resolve <domain>:443:<IP-server> https://<domain>/api/health
+  ```
+
+  Hasil harus **403**, sedangkan `https://<domain>` lewat Cloudflare tetap 200. Perbarui daftar IP
+  bila Cloudflare mengubahnya.
+- Cloudflare: SSL **Full (strict)** (sebelum awan oranye dinyalakan), *Always Use HTTPS*, WAF
+  bawaan aktif, *Bot Fight Mode* mati (bisa memblokir webhook). Jangan proksikan hostname untuk
+  SSH, VPN, RADIUS, atau API MikroTik (bukan HTTP).
 - Update OS & Coolify rutin.
 
 ### 10. Pemulihan ke server baru dari B2
