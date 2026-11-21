@@ -420,7 +420,7 @@ function LaporanPresensi({
               {formatTanggal(tglDate(lap.data.dari), "UTC")} –{" "}
               {formatTanggal(tglDate(lap.data.sampai), "UTC")}
             </p>
-            <ul className="grid gap-2 md:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {lap.data.rows.map((r) => (
                 <li
                   key={r.pendaftaranId}

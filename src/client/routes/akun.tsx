@@ -79,7 +79,7 @@ export function ProfilPage() {
         title="Profil"
         subtitle={me.user.roles.map((r) => r.nama).join(", ") || "Belum ada jabatan"}
       />
-      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <Card className="lg:col-span-7">
           <h2 className="mb-4 text-lg font-semibold">Data diri</h2>
           <ProfileForm me={me} />

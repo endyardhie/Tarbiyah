@@ -76,7 +76,7 @@ function PengaturanForm({ data }: { data: PengaturanBackupView }) {
   }
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Backup otomatis tiap (hari)">
           {(id) => (
             <Input
@@ -108,7 +108,7 @@ function PengaturanForm({ data }: { data: PengaturanBackupView }) {
         checked={v.b2Aktif}
         onChange={(e) => setV({ ...v, b2Aktif: e.target.checked })}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Endpoint S3" hint="Mis. https://s3.us-east-005.backblazeb2.com">
           {(id) => (
             <Input id={id} autoComplete="off" value={v.endpoint} onChange={set("endpoint")} />
@@ -392,7 +392,7 @@ export function BackupPage() {
           )}
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <Card className="lg:col-span-5">
           <h2 className="mb-3 text-lg font-semibold">Status</h2>
           {r ? (

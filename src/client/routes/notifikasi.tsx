@@ -153,7 +153,7 @@ export function AktifkanNotifikasiPage() {
         title="Aktifkan notifikasi"
         subtitle="Terima pemberitahuan PR, nilai, dan pengumuman di HP ini."
       />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="space-y-4">
           {state.isPending ? (
             <ListSkeleton rows={2} />

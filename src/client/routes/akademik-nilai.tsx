@@ -272,7 +272,7 @@ export function NilaiTab({ ajar }: { ajar: Ajar }) {
           PR, tugas, UH, UTS, UAS, atau praktik untuk semester {q.data.semester.nomor}.
         </EmptyState>
       ) : (
-        <ul className="grid gap-2 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {q.data.penilaian.map((p) => (
             <li key={p.id}>
               <button

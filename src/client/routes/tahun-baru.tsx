@@ -138,7 +138,7 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
             Tahun aktif sekarang <strong>{data.taLama.nama}</strong>. Struktur kelas dan tarif SPP
             disalin ke tahun baru; tahun lama menjadi arsip baca-saja.
           </p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Nama tahun ajaran">
               {(id) => (
                 <Input
@@ -170,7 +170,7 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
             </Field>
           </div>
           {sem.map((s, i) => (
-            <div key={s.nomor} className="grid gap-4 sm:grid-cols-3">
+            <div key={s.nomor} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <p className="self-end pb-3 font-semibold">Semester {s.nomor}</p>
               <Field label="Mulai">
                 {(id) => (

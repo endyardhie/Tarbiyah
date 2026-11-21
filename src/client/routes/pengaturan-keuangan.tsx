@@ -157,7 +157,7 @@ function WaForm({ data }: { data: PengaturanWaView }) {
           />
         )}
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="User basic auth">
           {(id) => (
             <Input
@@ -180,7 +180,7 @@ function WaForm({ data }: { data: PengaturanWaView }) {
           )}
         </Field>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Device ID (opsional)" hint="Diisi bila GOWA memegang lebih dari satu nomor.">
           {(id) => (
             <Input
@@ -252,7 +252,7 @@ function PembayaranForm({ data }: { data: PengaturanPembayaranView }) {
           />
         )}
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="API key" hint={secretHint(data.apiKey.terisi)}>
           {(id) => (
             <Input

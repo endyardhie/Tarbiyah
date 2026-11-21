@@ -217,7 +217,7 @@ export function PengaturanPage() {
       />
       {ident.isError && <ErrorAlert>{errorMessage(ident.error)}</ErrorAlert>}
       {ident.data && (
-        <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
           <Card className="lg:col-span-7">
             <h2 className="mb-4 text-lg font-semibold">Identitas</h2>
             <IdentitasForm data={ident.data} />

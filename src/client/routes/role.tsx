@@ -141,7 +141,7 @@ export function RolePage() {
         </Button>
       </div>
       {roles.isPending ? (
-        <div className="grid gap-3 md:grid-cols-2" aria-busy="true">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-busy="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-36 animate-pulse rounded-card bg-surface-muted" />
           ))}
@@ -149,7 +149,7 @@ export function RolePage() {
       ) : roles.isError ? (
         <ErrorAlert>{errorMessage(roles.error)}</ErrorAlert>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {roles.data.map((r) => (
             <li key={r.id}>
               <button

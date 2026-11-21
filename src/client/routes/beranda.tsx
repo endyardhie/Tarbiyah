@@ -253,7 +253,7 @@ function RingkasanKeuangan() {
           Buka keuangan
         </Link>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {stat("Tagihan bulan ini", d.tagihan, `${d.nTagihan} tagihan`)}
         {stat("Sudah dibayar", d.terbayar, `${d.nLunas} lunas`)}
         {stat("Tunggakan", d.tunggakan, `${d.nTunggak} santri lewat jatuh tempo`)}
@@ -488,7 +488,7 @@ export function BerandaPage() {
           Aplikasi ini berisi DATA CONTOH untuk uji coba, bukan data santri sungguhan.
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <section className="rounded-card bg-primary p-5 text-on-primary shadow-soft dark:bg-soft dark:text-on-soft md:p-6 lg:col-span-7">
           <h2 className="text-xl font-bold">Selamat datang di {config.data?.nama ?? "TARBIYAH"}</h2>
           <p className="mt-2 max-w-prose opacity-90">

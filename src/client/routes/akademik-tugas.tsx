@@ -191,7 +191,7 @@ export function TugasTab({ ajar }: { ajar: Ajar }) {
           Tugas/PR untuk mapel ini akan tampil di sini.
         </EmptyState>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {list.data.map((t) => (
             <li
               key={t.id}

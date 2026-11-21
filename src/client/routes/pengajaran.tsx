@@ -154,7 +154,7 @@ export function PengajaranPage() {
             : "Belum ada kelas di tahun ajaran aktif."}
         </EmptyState>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {rows.map((p) => (
             <li key={p.id} className="rounded-card border border-border bg-surface p-4 shadow-soft">
               <div className="flex items-start justify-between gap-3">

@@ -271,7 +271,7 @@ export function PenggunaPage() {
       </div>
 
       {users.isPending ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-32 animate-pulse rounded-card bg-surface-muted" />
           ))}

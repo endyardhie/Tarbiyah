@@ -130,7 +130,7 @@ export function LogPage() {
                     <summary className="min-h-11 cursor-pointer content-center text-sm font-semibold text-text2">
                       Rincian {r.entitas}
                     </summary>
-                    <div className="grid gap-2 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                       {r.sebelum != null && (
                         <pre className="overflow-x-auto rounded-2xl bg-surface-muted p-3 text-xs">
                           Sebelum:{"\n"}

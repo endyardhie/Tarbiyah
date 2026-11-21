@@ -104,7 +104,7 @@ export function ImporPage() {
         title="Impor CSV santri & wali"
         subtitle="Untuk input awal banyak santri. Wali dengan nomor HP yang sama digabung jadi satu akun."
       />
-      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <Card className="space-y-4 lg:col-span-5">
           <ol className="list-decimal space-y-1 pl-5 text-sm text-text2">
             <li>Unduh template, isi di Excel/Google Sheets, simpan sebagai CSV.</li>

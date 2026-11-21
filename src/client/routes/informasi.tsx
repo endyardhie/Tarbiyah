@@ -274,7 +274,7 @@ export function KalenderPage() {
           </Button>
         )}
       </div>
-      <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <Card className="lg:col-span-7">
           <div className="mb-3 flex items-center justify-between">
             <button

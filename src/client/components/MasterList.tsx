@@ -72,7 +72,7 @@ export function MasterList<T extends { id: string }>({
       ) : list.data.length === 0 ? (
         <p className="rounded-2xl bg-surface-muted px-4 py-6 text-center text-text2">{empty}</p>
       ) : (
-        <ul className="grid gap-2 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {list.data.map((item) => (
             <li
               key={item.id}

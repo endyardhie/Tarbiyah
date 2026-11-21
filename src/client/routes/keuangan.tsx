@@ -645,7 +645,7 @@ function TarifTab() {
     );
   }
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
         <h2 className="text-lg font-semibold">Tarif SPP {d.tahunAjaran.nama}</h2>
         <p className="mb-3 text-sm text-text2">Per unit dan lokasi, per bulan.</p>
@@ -867,7 +867,7 @@ function LaporanTab() {
         <div className="h-40 animate-pulse rounded-card bg-surface-muted" />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Card>
               <p className="text-sm text-text2">Total penerimaan</p>
               <p className="text-xl font-bold tabular-nums">{formatRupiah(total)}</p>

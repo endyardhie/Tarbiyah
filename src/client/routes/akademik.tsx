@@ -186,7 +186,7 @@ function AkademikAnak() {
       ) : q.isError ? (
         <ErrorAlert>{errorMessage(q.error)}</ErrorAlert>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card className="space-y-3">
             <h2 className="text-lg font-semibold">PR & tugas aktif</h2>
             {q.data.tugas.length === 0 && <p className="text-text2">Tidak ada tugas aktif.</p>}
@@ -326,7 +326,7 @@ function PengaturanForm({ unitId, data }: { unitId: string; data: Pengaturan }) 
   });
   const num = (v: string) => Math.max(0, Math.min(100, Number(v) || 0));
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card className="space-y-3">
         <h2 className="text-lg font-semibold">Bobot nilai rapor</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -519,7 +519,7 @@ function TemplateEditor({
     onError: (e) => setMsg(errorMessage(e)),
   });
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Card className="space-y-3">
         <input
           aria-label="Nama template"
