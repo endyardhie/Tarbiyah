@@ -128,7 +128,11 @@ export async function planImport(db: Db, tahunAjaranId: string, rawRows: Record<
       if (!wNama) errors.push(`Nama wali ${n} kosong`);
       const nomor = normalizePhone(wHp);
       if (!nomor) {
-        errors.push(`Nomor HP wali ${n} tidak valid`);
+        errors.push(
+          /e\+/i.test(wHp)
+            ? `Nomor HP wali ${n} rusak (${wHp}): di Excel format kolom HP sebagai Teks, lalu ketik ulang nomornya`
+            : `Nomor HP wali ${n} tidak valid`,
+        );
         continue;
       }
       if (!(HUBUNGAN as readonly string[]).includes(wHub)) {

@@ -8,6 +8,7 @@ export type Ajar = {
   kelasNama: string;
   unitId: string;
   unitKode: string;
+  lokasiNama: string;
   mapelNama: string;
   guruId: string;
   bisaIsi: boolean;
@@ -46,4 +47,5 @@ export const useAjar = () =>
     queryFn: () => api<Ajar[]>("/akademik/pengajaran"),
   });
 
-export const ajarLabel = (p: Ajar) => `${p.mapelNama} · ${p.kelasNama} ${p.unitKode}`;
+export const ajarLabel = (p: Ajar) =>
+  `${p.mapelNama} · ${p.kelasNama} ${p.unitKode} ${p.lokasiNama}`;

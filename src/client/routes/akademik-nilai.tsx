@@ -30,7 +30,9 @@ function PenilaianForm({ ajar, onDone }: { ajar: Ajar; onDone: () => void }) {
   const hari = useHariIni();
   const [jenis, setJenis] = useState<Jenis>("UH");
   const [judul, setJudul] = useState("");
-  const [tanggal, setTanggal] = useState(hari.data?.tanggal ?? "");
+  const [pilihTanggal, setTanggal] = useState("");
+  // "Hari ini" dari server bisa datang setelah form terbuka; pakai selama belum dipilih.
+  const tanggal = pilihTanggal || hari.data?.tanggal || "";
   const [error, setError] = useState("");
   const save = useMutation({
     mutationFn: () => api("/penilaian", { body: { pengajaranId: ajar.id, jenis, judul, tanggal } }),

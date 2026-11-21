@@ -20,6 +20,7 @@ import {
   berkas,
   bobotNilai,
   kelas,
+  lokasi,
   mapel,
   nilai,
   pendaftaran,
@@ -339,7 +340,8 @@ export function penilaianRoutes(deps: AppDeps) {
       );
       return c.json({
         penilaian: { ...pn, mapelNama: p.mapelNama, kelasNama: p.kelasNama },
-        bisaUbah: await can(currentUser(c), "akademik.isi", { pengajaranId: p.id }),
+        // Tahun arsip: baca-saja meski punya izin (PUT juga menolak).
+        bisaUbah: !p.arsip && (await can(currentUser(c), "akademik.isi", { pengajaranId: p.id })),
         santri: siswa.map((s) => ({
           ...s,
           nilai: vals.find((v) => v.pendaftaranId === s.pendaftaranId)?.nilai ?? null,
@@ -450,12 +452,14 @@ export function akademikRoutes(deps: AppDeps) {
             kelasNama: kelas.nama,
             unitId: kelas.unitId,
             unitKode: units.kode,
+            lokasiNama: lokasi.nama,
             mapelNama: mapel.nama,
             guruId: pengajaran.guruId,
           })
           .from(pengajaran)
           .innerJoin(kelas, eq(kelas.id, pengajaran.kelasId))
           .innerJoin(units, eq(units.id, kelas.unitId))
+          .innerJoin(lokasi, eq(lokasi.id, kelas.lokasiId))
           .innerJoin(mapel, eq(mapel.id, pengajaran.mapelId))
           .innerJoin(
             tahunAjaran,
@@ -473,7 +477,7 @@ export function akademikRoutes(deps: AppDeps) {
                     : sql`false`,
                 ),
           )
-          .orderBy(asc(kelas.nama), asc(mapel.nama));
+          .orderBy(asc(units.urutan), asc(lokasi.nama), asc(kelas.nama), asc(mapel.nama));
         return c.json(
           rows.map((r) => ({
             ...r,

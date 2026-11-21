@@ -56,17 +56,24 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
   };
 
   const jalan = useMutation({
-    mutationFn: () =>
-      api<{ kelas: number; tarif: number; keputusan: Record<string, number> }>("/tahun-baru", {
-        body: {
-          tahunAjaran: ta,
-          semester: sem,
-          keputusan: [...putusan].map(([santriId, v]) => ({ santriId, ...v })),
+    // Nama tahun dicatat saat dijalankan: data usulan dimuat ulang setelah berhasil.
+    mutationFn: async () => ({
+      ...(await api<{ kelas: number; tarif: number; keputusan: Record<string, number> }>(
+        "/tahun-baru",
+        {
+          body: {
+            tahunAjaran: ta,
+            semester: sem,
+            keputusan: [...putusan].map(([santriId, v]) => ({ santriId, ...v })),
+          },
         },
-      }),
+      )),
+      baru: ta.nama,
+      lama: data.taLama.nama,
+    }),
     onSuccess: async () => {
+      setKonfirmasi(false);
       await queryClient.invalidateQueries();
-      navigate({ to: "/sekolah" });
     },
     onError: (e) => {
       setKonfirmasi(false);
@@ -88,6 +95,28 @@ function Wizard({ data }: { data: UsulanTahunBaru }) {
         .length,
     }))
     .filter((x) => x.n);
+
+  if (jalan.isSuccess)
+    return (
+      <Card className="space-y-3">
+        <h2 className="text-lg font-bold">Tahun ajaran {jalan.data.baru} sudah aktif</h2>
+        <p className="text-text2">
+          {jalan.data.kelas} kelas dan {jalan.data.tarif} tarif SPP disalin. Tahun {jalan.data.lama}{" "}
+          kini hanya bisa dibaca.
+        </p>
+        <p className="text-sm font-semibold">Langkah berikutnya:</p>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-text2">
+          <li>Periksa wali kelas tiap kelas (disalin dari tahun lalu).</li>
+          <li>Atur ulang pengajaran guru dan jadwal pelajaran.</li>
+        </ul>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => navigate({ to: "/sekolah/kelas" })}>Periksa kelas</Button>
+          <Button variant="secondary" onClick={() => navigate({ to: "/sekolah/pengajaran" })}>
+            Atur pengajaran
+          </Button>
+        </div>
+      </Card>
+    );
 
   return (
     <div className="space-y-4">

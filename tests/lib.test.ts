@@ -11,10 +11,12 @@ describe("normalizePhone", () => {
     ["+62 812 3456 7890", "6281234567890"],
     ["6281234567890", "6281234567890"],
     ["81234567890", "6281234567890"],
+    ["0811-123-456", "62811123456"],
   ])("%s → %s", (input, out) => expect(normalizePhone(input)).toBe(out));
 
-  it.each(["", "12345", "0211234567", "08123", "+1 555 123 4567"])("tolak %s", (input) =>
-    expect(normalizePhone(input)).toBeNull(),
+  it.each(["", "12345", "0211234567", "08123", "+1 555 123 4567", "8,12999E+10", "081299910"])(
+    "tolak %s",
+    (input) => expect(normalizePhone(input)).toBeNull(),
   );
 });
 

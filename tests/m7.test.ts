@@ -194,6 +194,12 @@ describe("wizard tahun ajaran baru", () => {
     expect(bentrok.body.error).toContain("sudah ada");
     await t.db.delete(tahunAjaran).where(eq(tahunAjaran.nama, "2027/2028"));
 
+    const uh = await post("/api/penilaian", {
+      pengajaranId: id.ajar,
+      jenis: "UH",
+      judul: "UH sebelum arsip",
+      tanggal: "2026-11-02",
+    });
     const hasil = await post("/api/tahun-baru", body);
     expect(hasil).toMatchObject({
       kelas: 3,
@@ -253,6 +259,9 @@ describe("wizard tahun ajaran baru", () => {
       body: { pengajaranId: id.ajar, hari: 1, jamMulai: "07:00", jamSelesai: "08:00" },
     });
     expect(jadwal.status).toBe(409);
+    // Penilaian tahun arsip ditandai baca-saja, sejalan dengan PUT yang menolak.
+    const nilai = await t.req("GET", `/api/penilaian/${uh.id}/nilai`, { cookie: admin });
+    expect(nilai.body.bisaUbah).toBe(false);
   });
 });
 
